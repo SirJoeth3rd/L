@@ -1,3 +1,9 @@
 [submodule "arena"]
 	path = arena
 	url = https://github.com/tsoding/arena.git
+[submodule "BuildYourOwnLisp"]
+	path = BuildYourOwnLisp
+	url = https://github.com/orangeduck/BuildYourOwnLisp.git
+[submodule "dn_hashmap"]
+	path = dn_hashmap
+	url = git@github.com:SirJoeth3rd/dn_hashmap.git
