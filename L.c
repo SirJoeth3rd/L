@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "dn_hashmap/dn_hashmap.h"
 #include "dn_hashmap/arena.h"
@@ -38,7 +39,7 @@
 
    (decdef another-predicate? (num-a int num-b int)
      (num-a == num-b)) --> result of function is the final expression
-
+     
    (defmacro decdef (name args type body)
      (let ((arg-names list) (arg-types list))
        (foreach (argname type) :in args (
@@ -337,7 +338,6 @@ void recur_print(LVal* lval) {
     break;
   case Cons:
     if (lval->car->ltype == Cons) {
-      
       printf("[");
       fflush(stdout);
       
