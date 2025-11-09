@@ -7,6 +7,7 @@
 
 #include "dn_hashmap/dn_hashmap.h"
 #include "dn_hashmap/arena.h"
+#include "dn_hashmap/dn_string.h"
 #include "komihash.h"
 
 /*
@@ -140,48 +141,92 @@
  */
 
 typedef struct LEnv {
-  HashMap symbol_table; // string -> LSymbol
+  HashMap symbol_table; // char* -> LType
 } LEnv;
 
-typedef struct LType {
+typedef struct LVal LVal;
+typedef struct LType LType;
+
+struct LType {
   const char* name;
   struct LType* parent;
-} LType;
+  uint16_t members_len;
+  struct LType* members;
+};
 
-typedef struct {
-  const char* chars;
-  uint32_t length;
-} LString;
+#define SEED 0
 
-typedef struct LVal LVal;
+#define INT "int"
+#define CHAR "char"
+#define BOOL "bool"
+
+LEnv env_init(Arena* types_arena) {
+  // initialize with the basic types
+  HashMap symbol_table;
+  LType* int_ptr, *char_ptr, *bool_ptr;
+  LEnv env;
+  
+  symbol_table = hm_init(sizeof(LType));
+
+  int_ptr = (LType*)arena_alloc(types_arena, sizeof(LType));
+  int_ptr->name = (char*)arena_alloc_val(types_arena, sizeof(INT), INT);
+
+  char_ptr = (LType*)arena_alloc(types_arena, sizeof(LType));
+  char_ptr->name = (char*)arena_alloc_val(types_arena, sizeof(CHAR), CHAR);
+  
+  bool_ptr = (LType*)arena_alloc(types_arena, sizeof(LType));
+  bool_ptr->name = (char*)arena_alloc_val(types_arena, sizeof(BOOL), BOOL);
+
+  hm_put(&symbol_table, komihash(INT, sizeof(INT), SEED), int_ptr);
+  hm_put(&symbol_table, komihash(CHAR, sizeof(CHAR), SEED), char_ptr);
+  hm_put(&symbol_table, komihash(BOOL, sizeof(BOOL), SEED), bool_ptr);
+
+  env.symbol_table = symbol_table;
+
+  return env;
+}
+
+/*
+  We would store char some_func(int, bool) in LType as
+  name = some_func
+  parent = *function_pointer
+  members_len = 3
+  members = [*char, *int, *bool]
+ */
 
 struct LVal {
   enum {
-    Symbol,
-    String,
-    Number,
-    Cons,
-    Nil
+    LSymbol,
+    LString,
+    LNumber,
+    LCons,
+    LNil
   } ltype;
   union {
     struct {
       LVal* car;
       LVal* cdr;
     };
-    LString symbol;
-    LString string;
+    String symbol;
+    String string;
     long long int number;  
   };
-  LType type;
 };
+
+typedef struct {
+  bool valid;
+  const char* mesg;
+} LErr;
 
 LVal cons(struct LVal* car, struct LVal* cdr) {
   return (LVal){
-    .ltype = Cons,
+    .ltype = LCons,
     .car = car,
     .cdr = cdr
   };
 }
+
+//# Parsing
 
 LVal* parse_number(Arena* arena, char** chr);
 LVal* parse_string(Arena* arena, char** chr);
@@ -193,7 +238,7 @@ LVal* parse(Arena* arena, char** chr) {
   lval = (LVal*)arena_alloc(arena, sizeof(*lval));
   
   root = lval;
-  root->ltype = Cons;
+  root->ltype = LCons;
 
   while(**chr) {
     switch (**chr) {
@@ -210,7 +255,7 @@ LVal* parse(Arena* arena, char** chr) {
       
     case ')':
       (*chr)++;
-      lval->ltype = Nil;
+      lval->ltype = LNil;
       goto exit_parse;
 
     case '"':
@@ -229,11 +274,11 @@ LVal* parse(Arena* arena, char** chr) {
   post_symbol:
     lval->cdr = (LVal*)arena_alloc(arena, sizeof(*lval));
     lval = lval->cdr;
-    lval->ltype = Cons;
+    lval->ltype = LCons;
   }
 
   // getting here -> reached end of input -> current lval = Nil
-  lval->ltype = Nil;
+  lval->ltype = LNil;
 
  exit_parse:
   return root;
@@ -253,7 +298,7 @@ LVal* parse_number(Arena* arena, char** chr) {
 
   buffer[i] = 0;
   lval = arena_alloc(arena, sizeof(*lval));
-  lval->ltype = Number;
+  lval->ltype = LNumber;
   lval->number = atoi(buffer);
   return lval;
 }
@@ -278,8 +323,8 @@ LVal* parse_string(Arena* arena, char** chr) {
   }
 
   lval = arena_alloc(arena, sizeof(*lval));
-  lval->ltype = String;
-  lval->string = (LString) {
+  lval->ltype = LString;
+  lval->string = (String) {
     .chars = starting_position,
     .length = length
   };
@@ -294,14 +339,14 @@ LVal* parse_symbol(Arena* arena, char** chr) {
 
   length = 0;
   start_position = *chr;
-  while(!isspace(**chr) && **chr != '\0') {
+  while(!isspace(**chr) && **chr != '\0' && **chr != ')') {
     length++;
     (*chr)++;
   }
 
   lval = (LVal*)arena_alloc(arena, sizeof(*lval));
-  lval->ltype = Symbol;
-  lval->symbol = (LString) {
+  lval->ltype = LSymbol;
+  lval->symbol = (String) {
     .chars = start_position,
     .length = length
   };
@@ -309,59 +354,103 @@ LVal* parse_symbol(Arena* arena, char** chr) {
   return lval;
 }
 
-char* LString_cstring(LString lstring) {
-  char* buffer;
-  buffer = malloc(sizeof(char)*(lstring.length+1));
-  memcpy(buffer, lstring.chars, lstring.length);
-  buffer[lstring.length] = '\0';
-  return buffer;
+void print_ltype(LVal* lval) {
+  switch (lval->ltype) {
+  case LSymbol:
+    printf("symbol");
+    break;
+  case LString:
+    printf("string");
+    break;
+  case LNumber:
+    printf("number");
+    break;
+  case LCons:
+    printf("cons");
+    break;
+  case LNil:
+    printf("nil");
+    break;
+  }
 }
 
-void recur_print(LVal* lval) {
+void recur_print(Arena* arena, LVal* lval) {
   // XXX: TODO, fix such that it does not leak memory
   switch (lval->ltype) {
-  case Symbol:
-    printf("%s ", LString_cstring(lval->symbol));
+  case LSymbol:
+    printf("%s", String_cstring(arena, lval->symbol));
     fflush(stdout);
     break;
-  case String:
-    printf("%s ", LString_cstring(lval->string));
+  case LString:
+    printf("%s", String_cstring(arena, lval->string));
     fflush(stdout);
     break;
-  case Number:
-    printf("%lli ", lval->number);
+  case LNumber:
+    printf("%lli", lval->number);
     fflush(stdout);
     break;
-  case Nil:
-    printf("nil ");
+  case LNil:
+    printf("nil");
     fflush(stdout);
     break;
-  case Cons:
-    if (lval->car->ltype == Cons) {
-      printf("[");
-      fflush(stdout);
-      
-      recur_print(lval->car);
-      
-      printf("] ");
-      fflush(stdout);
-      
-      recur_print(lval->cdr);
-      
-    } else {
-      recur_print(lval->car);
-      recur_print(lval->cdr);
+  case LCons:
+    printf("<"); fflush(stdout);
+    recur_print(arena, lval->car);
+    printf(","); fflush(stdout);
+    recur_print(arena, lval->cdr);
+    printf(">"); fflush(stdout);
+  }
+}
+
+//# Lexical Analysis
+
+LErr analyse_dec(Arena* arena, LVal* lval, LEnv* env);
+
+LErr analyse(Arena* arena, LVal* lval, LEnv* env) { // (dec f (int int) int))
+  if (lval->ltype == LCons) {
+    if (lval->car->ltype == LCons) {
+      if (lval->car->car->ltype == LSymbol) {
+	if (String_cmp(lval->car->car->symbol, "dec")) {
+	  analyse_dec(arena, lval->car->cdr, env);
+	}
+      }
     }
   }
-} 
+  return (LErr){0};
+}
+
+LErr analyse_dec(Arena* arena, LVal* lval, LEnv* env) {
+  // <f, <<int, <int, nil>>, <int, nil>>>
+  LType function_type;
+
+  //TODO allocate member types for this function and hm_get them.
+  
+  hm_put(&env->symbol_table, komihash(lval->car->symbol.chars, lval->car->symbol.length, SEED), &function_type);
+  return (LErr){};
+}
+
+//# Code generation
+
+char* translate(Arena arena, LVal* expr) {
+  return NULL;
+}
+
+
+//# Main
 
 int main(int argc, char** argv) {
   Arena expr_arena = arena_init();
+  Arena tmp_arena = arena_init();
 
-  char* expr = "(+ (* 1 2) (* 3 4))";
+  char* expr = "(dec f (int int) int) (def f (x y) (+ x y))";
   LVal* lexpr = parse(&expr_arena, &expr);
 
-  recur_print(lexpr);printf("\n");
+  recur_print(&tmp_arena, lexpr);printf("\n");
+
+  /* analyse(lexpr, NULL); */
+
+  arena_free(&tmp_arena);
+  arena_free(&expr_arena);
 
   return 0;
 }
