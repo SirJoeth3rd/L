@@ -151,40 +151,8 @@ struct LType {
   const char* name;
   struct LType* parent;
   uint16_t members_len;
-  struct LType* members;
+  // VLA *LType will come here for members_len > 0
 };
-
-#define SEED 0
-
-#define INT "int"
-#define CHAR "char"
-#define BOOL "bool"
-
-LEnv env_init(Arena* types_arena) {
-  // initialize with the basic types
-  HashMap symbol_table;
-  LType* int_ptr, *char_ptr, *bool_ptr;
-  LEnv env;
-  
-  symbol_table = hm_init(sizeof(LType));
-
-  int_ptr = (LType*)arena_alloc(types_arena, sizeof(LType));
-  int_ptr->name = (char*)arena_alloc_val(types_arena, sizeof(INT), INT);
-
-  char_ptr = (LType*)arena_alloc(types_arena, sizeof(LType));
-  char_ptr->name = (char*)arena_alloc_val(types_arena, sizeof(CHAR), CHAR);
-  
-  bool_ptr = (LType*)arena_alloc(types_arena, sizeof(LType));
-  bool_ptr->name = (char*)arena_alloc_val(types_arena, sizeof(BOOL), BOOL);
-
-  hm_put(&symbol_table, komihash(INT, sizeof(INT), SEED), int_ptr);
-  hm_put(&symbol_table, komihash(CHAR, sizeof(CHAR), SEED), char_ptr);
-  hm_put(&symbol_table, komihash(BOOL, sizeof(BOOL), SEED), bool_ptr);
-
-  env.symbol_table = symbol_table;
-
-  return env;
-}
 
 /*
   We would store char some_func(int, bool) in LType as
@@ -403,15 +371,52 @@ void recur_print(Arena* arena, LVal* lval) {
 }
 
 //# Lexical Analysis
+#define SEED 0
 
-LErr analyse_dec(Arena* arena, LVal* lval, LEnv* env);
+#define INT "int"
+#define CHAR "char"
+#define BOOL "bool"
+#define NIL "nil"
 
-LErr analyse(Arena* arena, LVal* lval, LEnv* env) { // (dec f (int int) int))
+LEnv env_init() {
+  // initialize with the basic types
+  HashMap symbol_table;
+  LType *nil_ptr;
+  LType new_type;
+  LEnv env;
+  
+  symbol_table = hm_init(sizeof(LType));
+
+  new_type.name = NIL;
+  new_type.members_len = 0;
+  nil_ptr = (LType*)hm_put(&symbol_table, komihash(NIL, sizeof(NIL)-1, SEED), &new_type);
+  nil_ptr->parent = nil_ptr;
+
+  new_type.name = "function";
+  new_type.members_len = 0;
+  new_type.parent = nil_ptr;
+  hm_put(&symbol_table, komihash("function", sizeof("function")-1, SEED), &new_type);
+
+  new_type.name = INT;
+  new_type.members_len = 0;
+  new_type.parent = nil_ptr;
+  hm_put(&symbol_table, komihash(INT, sizeof(INT)-1, SEED), &new_type);
+
+  // TODO: other base types
+
+  env.symbol_table = symbol_table;
+
+  return env;
+}
+
+LErr analyse_dec(Arena* arena, LEnv* env, LVal* lval);
+
+LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
   if (lval->ltype == LCons) {
     if (lval->car->ltype == LCons) {
       if (lval->car->car->ltype == LSymbol) {
 	if (String_cmp(lval->car->car->symbol, "dec")) {
-	  analyse_dec(arena, lval->car->cdr, env);
+	  analyse_dec(arena, env, lval->car->cdr);
 	}
       }
     }
@@ -419,14 +424,82 @@ LErr analyse(Arena* arena, LVal* lval, LEnv* env) { // (dec f (int int) int))
   return (LErr){0};
 }
 
-LErr analyse_dec(Arena* arena, LVal* lval, LEnv* env) {
-  // <f, <<int, <int, nil>>, <int, nil>>>
-  LType function_type;
+int Llist_length(LVal* list) {
+  int len = 0;
+  while (list->cdr->ltype == LCons) {
+    if (list->car->ltype != LNil) {
+      len++;
+    }
+    list = list->cdr;
+  }
+  if (list->car->ltype != LNil) {
+    len++;
+  }
+  return len;
+}
 
-  //TODO allocate member types for this function and hm_get them.
+LType* symbol_table_get(LEnv* st, String name) {
+  return hm_get(&st->symbol_table, komihash(name.chars, name.length, SEED));
+}
+
+LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
+  // <f, <<int, <int, nil>>, <int, nil>>> == example setup
+  LType *function_type, *generic_function_type, *type;
+  LType **members;
+  LVal *params, *param, *return_param;
+  int param_count;
+
+  generic_function_type = (LType*)symbol_table_get(env, String_from_cstring("function"));
+
+  params = first_cons->cdr->car;
+  return_param = first_cons->cdr->cdr->car;
+  param = params;
+
+  param_count = Llist_length(params);
+  function_type = (LType*)arena_alloc(arena, sizeof(LType) + sizeof(LType*)*param_count + sizeof(LType*));
   
-  hm_put(&env->symbol_table, komihash(lval->car->symbol.chars, lval->car->symbol.length, SEED), &function_type);
-  return (LErr){};
+  function_type->name = arena_alloc_val(arena, sizeof("unkown")-1, "unkown");
+  function_type->parent = generic_function_type;
+
+  members = (LType**)&(function_type[1]);
+
+  param = params;
+  param_count = 0;
+  while (param->cdr->ltype == LCons) {
+    if (param->car->ltype != LSymbol) {
+      // TODO: error
+      printf("Expected type LSymbol but got ");
+      print_ltype(param->car);
+      printf("\n");
+    }
+
+    type = symbol_table_get(env, param->car->symbol);
+    
+    if (!type) {
+      //TODO: error
+      printf("Could not find type %s\n", String_cstring(arena, param->symbol));
+    }
+
+    members[param_count] = type;
+    param_count++;
+    param = param->cdr;
+  }
+  if (param->car->ltype == LSymbol) {
+    type = symbol_table_get(env, param->car->symbol);
+    members[param_count] = type;
+  }
+  function_type->members_len = param_count;
+
+  LType* return_type = symbol_table_get(env, return_param->symbol);
+
+  if (!return_type) {
+    //TODO: error
+    printf("Could not find type %s\n", String_cstring(arena, param->symbol));
+  }
+
+  members[param_count+1] = return_type;
+  
+  return (LErr){0};
 }
 
 //# Code generation
@@ -439,18 +512,33 @@ char* translate(Arena arena, LVal* expr) {
 //# Main
 
 int main(int argc, char** argv) {
-  Arena expr_arena = arena_init();
+  char* expr_ptr;
+  LEnv env;
+
   Arena tmp_arena = arena_init();
 
   char* expr = "(dec f (int int) int) (def f (x y) (+ x y))";
-  LVal* lexpr = parse(&expr_arena, &expr);
+  expr_ptr = expr;
+  LVal* lexpr = parse(&tmp_arena, &expr_ptr);
 
   recur_print(&tmp_arena, lexpr);printf("\n");
 
-  /* analyse(lexpr, NULL); */
+  env = env_init();
+  analyse(&tmp_arena, &env, lexpr);
 
-  arena_free(&tmp_arena);
-  arena_free(&expr_arena);
+  // now there should be a f with type int -> int -> int
+  LType** members;
+  LType* function;
+  function = (LType*)hm_get(&env.symbol_table, komihash("f", 1, 0));
+  members = (LType**)(function + 1);
 
+  printf("f members:");
+  for (int i = 0; i < function->members_len; i++) {
+    printf("%s,", members[i]->name);
+  }
+  printf("\n");
+
+  
+  /* arena_free(&tmp_arena); */
   return 0;
 }
