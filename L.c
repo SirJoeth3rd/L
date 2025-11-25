@@ -1,3 +1,5 @@
+#define NDEBUG
+
 #include <stdio.h>
 #include <ctype.h>
 #include <stdbool.h>
@@ -91,7 +93,7 @@
 
    Implementation details of macros are clear to me
    - Every argument to a macro has the same type LExpr
-   - The output of a macro is always an LExpr
+   - The output of a macro is always an LExpr	
 
    (decdef concatenate (string-one char* string-two char*) char*
      (let
@@ -139,9 +141,11 @@
   2. Find all decs
   3. Compile expanded code
  */
+// TODO, need a hierarchical hashmap for namespaces
 
 typedef struct LEnv {
   HashMap symbol_table; // char* -> LType
+  
 } LEnv;
 
 typedef struct LVal LVal;
@@ -349,7 +353,6 @@ void print_ltype(LVal* lval) {
 }
 
 void recur_print(Arena* arena, LVal* lval) {
-  // XXX: TODO, fix such that it does not leak memory
   switch (lval->ltype) {
   case LSymbol:
     printf("%s", String_cstring(arena, lval->symbol));
@@ -378,7 +381,6 @@ void recur_print(Arena* arena, LVal* lval) {
 
 //# Lexical Analysis
 
-
 #define INT "int"
 #define CHAR "char"
 #define BOOL "bool"
@@ -398,12 +400,22 @@ LEnv env_init() {
   nil_ptr = (LType*)hm_put(&symbol_table, String_hash(new_type.name), &new_type);
   nil_ptr->parent = nil_ptr;
 
-  new_type.name = (String){.chars = "function", .length=sizeof("function")-1};
+  new_type.name = (String){.chars = "callable", .length=sizeof("callable")-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
   hm_put(&symbol_table, String_hash(new_type.name), &new_type);
 
   new_type.name = (String){.chars = INT, .length=sizeof(INT)-1};
+  new_type.members_len = 0;
+  new_type.parent = nil_ptr;
+  hm_put(&symbol_table, String_hash(new_type.name), &new_type);
+
+  new_type.name = (String){.chars = BOOL, .length=sizeof(BOOL)-1};
+  new_type.members_len = 0;
+  new_type.parent = nil_ptr;
+  hm_put(&symbol_table, String_hash(new_type.name), &new_type);
+
+  new_type.name = (String){.chars = CHAR, .length=sizeof(CHAR)-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
   hm_put(&symbol_table, String_hash(new_type.name), &new_type);
@@ -503,10 +515,84 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
 
 //# Code generation
 
-char* translate(Arena arena, LVal* expr) {
-  return NULL;
+void compile_plus(int, LEnv*, LVal*);
+void compile_minus(int, LEnv*, LVal*);
+void compile_def(int, LEnv*, LVal*);
+void compile(int, LEnv*, LVal*);
+
+static Arena compile_arena;
+
+void compile(int fd, LEnv* env, LVal* lval) {
+  //(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>
+  compile_arena = arena_init();
+  while (lval->ltype != LNil) {
+    if (lval->ltype == LCons) {
+      if (lval->car->ltype == LSymbol) {
+	if (String_cmp(lval->car->symbol, "+")) {
+	  compile_plus(fd, env, lval->cdr);
+	} else if (String_cmp(lval->car->symbol, "-")) {
+	  compile_minus(fd, env, lval->cdr);
+	} else if (String_cmp(lval->car->symbol, "def")) {
+	  compile_def(fd, env, lval->cdr);
+	}
+      }
+      if (lval->car->ltype == LCons) {
+	compile(fd, env, lval->car);
+      }
+      lval = lval->cdr;
+    }
+  }
 }
 
+void compile_plus(int fd, LEnv* env, LVal* lval) {
+  //(+ x y z)
+  while (lval->cdr->ltype == LCons) {
+    // TODO: assuming here that the type is symbol
+    dprintf(fd, "%s + ", String_cstring(&compile_arena, lval->car->symbol));
+    lval = lval->cdr;
+  }
+  dprintf(fd, "%s", String_cstring(&compile_arena, lval->car->symbol));
+}
+
+void compile_minus(int fd, LEnv* env, LVal* lval) {
+  //(+ x y z)
+  while (lval->cdr->ltype == LCons) {
+    // TODO: assuming here that the type is symbol
+    dprintf(fd, "%s - ", String_cstring(&compile_arena, lval->car->symbol));
+    lval = lval->cdr;
+  }
+  dprintf(fd, "%s", String_cstring(&compile_arena, lval->car->symbol));
+}
+
+void compile_def(int fd, LEnv* env, LVal* lval) {
+  //<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>
+  //TODO: need to actually make sure these arguments align with the types
+  LVal* func_name, *args, *body;
+  LType* func_type;
+  int i;
+  
+  func_name = lval->car;
+  args = lval->cdr->car;
+  body = lval->cdr->cdr;
+
+  func_type = (LType*)hm_get(&env->symbol_table, String_hash(func_name->symbol));
+
+  dprintf(fd, "%s ", String_cstring(&compile_arena, func_type->parent->name));
+  dprintf(fd, "%s(", String_cstring(&compile_arena, func_name->symbol));
+
+  for (i = 0; i < func_type->members_len - 1; i++) {
+    dprintf(fd, "%s ", String_cstring(&compile_arena, func_type->members[i]->name));
+    dprintf(fd, "%s,", String_cstring(&compile_arena, args->car->symbol));
+    args = args->cdr;
+  }
+
+  dprintf(fd, "%s ", String_cstring(&compile_arena, func_type->members[i]->name));
+  dprintf(fd, "%s) {\n", String_cstring(&compile_arena, args->car->symbol));
+
+  compile(fd, env, body);
+  
+  dprintf(fd, "}");
+}
 
 //# Main
 
@@ -516,7 +602,7 @@ int main(int argc, char** argv) {
 
   Arena tmp_arena = arena_init();
 
-  char* expr = "(dec f (int int) nil) (def f (x y) (+ x y))";
+  char* expr = "(dec main (char int) int) (def main (argc argv) (return 0))";
   expr_ptr = expr;
   LVal* lexpr = parse(&tmp_arena, &expr_ptr);
 
@@ -525,8 +611,16 @@ int main(int argc, char** argv) {
   env = env_init();
   analyse(&tmp_arena, &env, lexpr);
 
-  LType* function_type = (LType*)hm_get(&env.symbol_table, String_hash(String_from_cstring("f")));
+  FILE* file = fopen("compiled.c", "w+");
+  if (file == NULL) {
+    perror("Error opening file\n");
+    return EXIT_FAILURE;
+  }
 
+  int fd = fileno(file);
+  compile(fd,&env,lexpr);
+
+  fclose(file);
   
   arena_free(&tmp_arena);
   return 0;
