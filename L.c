@@ -145,7 +145,6 @@
 
 typedef struct LEnv {
   HashMap symbol_table; // char* -> LType
-  
 } LEnv;
 
 typedef struct LVal LVal;
@@ -386,12 +385,14 @@ void recur_print(Arena* arena, LVal* lval) {
 #define BOOL "bool"
 #define NIL "nil"
 
-LEnv env_init() {
+LEnv env_init(Arena* arena) {
   // initialize with the basic types
   HashMap symbol_table;
   LType *nil_ptr;
   LType new_type;
   LEnv env;
+
+  LType *char_type, *char_ptr_type, *int_type;
   
   symbol_table = hm_init(sizeof(LType));
 
@@ -400,24 +401,36 @@ LEnv env_init() {
   nil_ptr = (LType*)hm_put(&symbol_table, String_hash(new_type.name), &new_type);
   nil_ptr->parent = nil_ptr;
 
-  new_type.name = (String){.chars = "callable", .length=sizeof("callable")-1};
-  new_type.members_len = 0;
-  new_type.parent = nil_ptr;
-  hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-
   new_type.name = (String){.chars = INT, .length=sizeof(INT)-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  hm_put(&symbol_table, String_hash(new_type.name), &new_type);
+  int_type = hm_put(&symbol_table, String_hash(new_type.name), &new_type);
+
+  new_type.name = (String){.chars = CHAR, .length=sizeof(CHAR)-1};
+  new_type.members_len = 0;
+  new_type.parent = nil_ptr;
+  char_type = hm_put(&symbol_table, String_hash(new_type.name), &new_type);
 
   new_type.name = (String){.chars = BOOL, .length=sizeof(BOOL)-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
   hm_put(&symbol_table, String_hash(new_type.name), &new_type);
 
-  new_type.name = (String){.chars = CHAR, .length=sizeof(CHAR)-1};
-  new_type.members_len = 0;
-  new_type.parent = nil_ptr;
+  // technically we can have char*********; so this should actually be generalized and the
+  // types for pointers should only be added during the analysis phase. (except maybe the first pointer type)
+
+  new_type.name = (String){.chars = "char*", .length=(sizeof("char*")-1)};
+  new_type.parent = char_type;
+  new_type.members_len = 1;
+  new_type.members = arena_alloc(arena, sizeof(LType*));
+  *new_type.members = int_type;
+  char_ptr_type = hm_put(&symbol_table, String_hash(new_type.name), &new_type);
+
+  new_type.name = (String){.chars = "char**", .length=(sizeof("char**")-1)};
+  new_type.parent = char_ptr_type;
+  new_type.members_len = 1;
+  new_type.members = arena_alloc(arena, sizeof(LType*));
+  *new_type.members = int_type;
   hm_put(&symbol_table, String_hash(new_type.name), &new_type);
 
   // TODO: other base types
@@ -430,13 +443,16 @@ LEnv env_init() {
 LErr analyse_dec(Arena* arena, LEnv* env, LVal* lval);
 
 LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
-  if (lval->ltype == LCons) {
-    if (lval->car->ltype == LCons) {
-      if (lval->car->car->ltype == LSymbol) {
-	if (String_cmp(lval->car->car->symbol, "dec")) {
-	  analyse_dec(arena, env, lval->car->cdr);
+  while (lval && lval->ltype != LNil) {
+    if (lval->ltype == LCons) {
+      if (lval->car->ltype == LCons) {
+	if (lval->car->car->ltype == LSymbol) {
+	  if (String_cmp(lval->car->car->symbol, "dec")) {
+	    analyse_dec(arena, env, lval->car->cdr);
+	  }
 	}
       }
+      lval = lval->cdr;
     }
   }
   return (LErr){0};
@@ -444,6 +460,9 @@ LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
 
 int Llist_length(LVal* list) {
   int len = 0;
+  if (list->ltype != LCons) {
+    return 0;
+  }
   while (list->cdr->ltype == LCons) {
     if (list->car->ltype != LNil) {
       len++;
@@ -495,7 +514,7 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
     param = param->cdr;
   }
   
-  if (param->car->ltype == LSymbol) {
+  if (param->ltype == LCons && param->car->ltype == LSymbol) {
     member_type = symbol_table_get(env, param->car->symbol);
     function_type.members[param_count-1] = member_type;
   }// TODO: else error
@@ -515,17 +534,51 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
 
 //# Code generation
 
+void print_lval(int, LVal*);
+void print_comma_seperated_list(int, LVal*);
 void compile_plus(int, LEnv*, LVal*);
 void compile_minus(int, LEnv*, LVal*);
+void compile_mul(int, LEnv*, LVal*);
 void compile_def(int, LEnv*, LVal*);
+void compile_let(int, LEnv*, LVal*);
 void compile(int, LEnv*, LVal*);
 
-static Arena compile_arena;
+void print_lval(int fd, LVal* lval) {
+  switch(lval->ltype) {
+  case LSymbol:
+    dprintf(fd, "%.*s", lval->symbol.length, lval->symbol.chars);
+    break;
+  case LNumber:
+    dprintf(fd, "%lld", lval->number);
+    break;
+  case LString:
+    dprintf(fd, "\"%.*s\"", lval->string.length, lval->string.chars);
+    break;
+  default:
+    printf("tried to print lval of type ");
+    print_ltype(lval);
+    printf("\n");
+    break;
+  }
+}
+
+void print_comma_seperated_list(int fd, LVal* list) {
+  int i, length;
+  length = Llist_length(list);
+  for (i = 0; i < length - 1; i++) {
+    print_lval(fd, list->car);
+    list = list->cdr;
+  }
+  if (length > 0) {
+    print_lval(fd, list->car);
+  }
+}
 
 void compile(int fd, LEnv* env, LVal* lval) {
   //(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>
-  compile_arena = arena_init();
-  while (lval->ltype != LNil) {
+  LType* func_type;
+
+  while (lval->ltype != LNil && lval) {
     if (lval->ltype == LCons) {
       if (lval->car->ltype == LSymbol) {
 	if (String_cmp(lval->car->symbol, "+")) {
@@ -534,9 +587,30 @@ void compile(int fd, LEnv* env, LVal* lval) {
 	  compile_minus(fd, env, lval->cdr);
 	} else if (String_cmp(lval->car->symbol, "def")) {
 	  compile_def(fd, env, lval->cdr);
+	} else if (String_cmp(lval->car->symbol, "let")){
+	  compile_let(fd, env, lval->cdr);
+	} else if (String_cmp(lval->car->symbol, "*")){
+	  compile_mul(fd, env, lval->cdr);
+	} else if (String_cmp(lval->car->symbol, "dec")){
+	  return;
+	} else if (String_cmp(lval->car->symbol, "return")){
+	  //TODO: L code should not have to specify return.
+	  dprintf(fd, "return ");
+	  compile(fd, env, lval->cdr);
+	  dprintf(fd, ";\n");
+	} else {
+	  func_type = hm_get(&env->symbol_table, String_hash(lval->car->symbol));
+	  if (!func_type) {
+	    printf("unrecgonized symbol -> %s", String_cstring(NULL, lval->car->symbol));
+	  } else {
+	    dprintf(fd, "%.*s(", lval->car->symbol.length, lval->car->symbol.chars);
+	    print_comma_seperated_list(fd, lval->cdr);
+	    dprintf(fd, ")");
+	  }
 	}
-      }
-      if (lval->car->ltype == LCons) {
+	// compile_... will consume the entire list ie we can exit out of compile
+	return;
+      } else if (lval->car->ltype == LCons) {
 	compile(fd, env, lval->car);
       }
       lval = lval->cdr;
@@ -548,25 +622,35 @@ void compile_plus(int fd, LEnv* env, LVal* lval) {
   //(+ x y z)
   while (lval->cdr->ltype == LCons) {
     // TODO: assuming here that the type is symbol
-    dprintf(fd, "%s + ", String_cstring(&compile_arena, lval->car->symbol));
+    dprintf(fd, "%.*s + ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
-  dprintf(fd, "%s", String_cstring(&compile_arena, lval->car->symbol));
+  dprintf(fd, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
 }
 
 void compile_minus(int fd, LEnv* env, LVal* lval) {
   //(+ x y z)
   while (lval->cdr->ltype == LCons) {
     // TODO: assuming here that the type is symbol
-    dprintf(fd, "%s - ", String_cstring(&compile_arena, lval->car->symbol));
+    dprintf(fd, "%.*s - ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
-  dprintf(fd, "%s", String_cstring(&compile_arena, lval->car->symbol));
+  dprintf(fd, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
+}
+
+void compile_mul(int fd, LEnv* env, LVal* lval) {
+  //(+ x y z)
+  while (lval->cdr->ltype == LCons) {
+    // TODO: assuming here that the type is symbol
+    dprintf(fd, "%.*s * ", lval->car->symbol.length, lval->car->symbol.chars);
+    lval = lval->cdr;
+  }
+  dprintf(fd, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
 }
 
 void compile_def(int fd, LEnv* env, LVal* lval) {
   //<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>
-  //TODO: need to actually make sure these arguments align with the types
+  //TODO: need to actually type check here
   LVal* func_name, *args, *body;
   LType* func_type;
   int i;
@@ -577,38 +661,94 @@ void compile_def(int fd, LEnv* env, LVal* lval) {
 
   func_type = (LType*)hm_get(&env->symbol_table, String_hash(func_name->symbol));
 
-  dprintf(fd, "%s ", String_cstring(&compile_arena, func_type->parent->name));
-  dprintf(fd, "%s(", String_cstring(&compile_arena, func_name->symbol));
+  dprintf(fd, "%.*s ", func_type->parent->name.length, func_type->parent->name.chars);
+  dprintf(fd, "%.*s(", func_name->symbol.length, func_name->symbol.chars);
 
   for (i = 0; i < func_type->members_len - 1; i++) {
-    dprintf(fd, "%s ", String_cstring(&compile_arena, func_type->members[i]->name));
-    dprintf(fd, "%s,", String_cstring(&compile_arena, args->car->symbol));
+    dprintf(fd, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
+    dprintf(fd, "%.*s,", args->car->symbol.length, args->car->symbol.chars);
     args = args->cdr;
   }
 
-  dprintf(fd, "%s ", String_cstring(&compile_arena, func_type->members[i]->name));
-  dprintf(fd, "%s) {\n", String_cstring(&compile_arena, args->car->symbol));
+  if (func_type->members_len) {
+    dprintf(fd, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
+    dprintf(fd, "%.*s) {\n", args->car->symbol.length, args->car->symbol.chars);
+  }
+
+  // TODO: update env to include function local variables
 
   compile(fd, env, body);
   
+  dprintf(fd, "}\n");
+}
+
+void compile_let(int fd, LEnv* env, LVal* lval) {
+  /* <<let,<<<x,<int,nil>>,<<y,<char,nil>>,nil>>,<<+,<x,<y,nil>>>,nil>>>,nil> */
+  LVal* var_pairs, *body, *var_pair, *var_name, *var_type_symbol;
+  int i, total_pairs;
+  
+  var_pairs = lval->car;
+  body = lval->cdr;
+
+  dprintf(fd, "{");
+
+  total_pairs = Llist_length(var_pairs);
+  for (i = 0; i < total_pairs; i++) {
+    var_pair = var_pairs->car;
+    var_name = var_pair->car;
+    var_type_symbol = var_pair->cdr->car;
+
+    dprintf(fd, "%.*s ", var_type_symbol->symbol.length, var_type_symbol->symbol.chars);
+    dprintf(fd, "%.*s;\n", var_name->symbol.length, var_name->symbol.chars);
+    var_pairs = var_pairs->cdr;
+  }
+  
+  compile(fd, env, body);
   dprintf(fd, "}");
 }
 
 //# Main
 
+char* read_file(const char* filename) {
+  FILE* file;
+  char* buffer, *bstart;
+  long filesize;
+  char c;
+
+  file = fopen(filename, "r");
+  fseek(file, 0L, SEEK_END);
+  filesize = ftell(file);
+
+  // move file pointer back to start
+  fseek(file, 0, SEEK_SET);
+
+  bstart = malloc(filesize*sizeof(char));
+  buffer = bstart;
+
+  c = fgetc(file);
+  while(c != EOF) {
+    *buffer = c;
+    buffer++;
+    c = fgetc(file);
+  }
+
+  fclose(file);
+  return bstart;
+}
+
 int main(int argc, char** argv) {
-  char* expr_ptr;
+  char *lcode_ptr, *lcode;
   LEnv env;
 
   Arena tmp_arena = arena_init();
 
-  char* expr = "(dec main (char int) int) (def main (argc argv) (return 0))";
-  expr_ptr = expr;
-  LVal* lexpr = parse(&tmp_arena, &expr_ptr);
+  lcode = read_file("./code.l");
+  lcode_ptr = lcode;
+  LVal* lexpr = parse(&tmp_arena, &lcode_ptr);
 
   recur_print(&tmp_arena, lexpr);printf("\n");
 
-  env = env_init();
+  env = env_init(&tmp_arena);
   analyse(&tmp_arena, &env, lexpr);
 
   FILE* file = fopen("compiled.c", "w+");
@@ -621,7 +761,7 @@ int main(int argc, char** argv) {
   compile(fd,&env,lexpr);
 
   fclose(file);
-  
+  free(lcode);
   arena_free(&tmp_arena);
   return 0;
 }
