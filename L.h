@@ -4,11 +4,7 @@
 #include <stdint.h>
 #include "src/arena.h"
 #include <stdbool.h>
-
-typedef struct {
-  char* chars;
-  unsigned int length;
-} LString;
+#include "src/string.h"
 
 typedef struct {
   bool valid;
@@ -65,11 +61,20 @@ LType* env_put(LEnv*, LString, LType);
 void env_delete(LEnv*, LString);
 void env_resize(LEnv*);
 
+// Helpers
+void print_ltype(LVal*);
+LVal cons(LVal*, LVal*);
+void recur_print(LVal*);
+int Llist_length(LVal*);
+
 // Parser 
 LVal* parse(Arena*, char**); // parse to lval
 
 // Analysis
 LErr analyse_dec(Arena*, LEnv*, LVal*); 
 LErr analyse(Arena*, LEnv*, LVal*); // add type info
+
+// Code Gen
+void compile(int, LEnv*, LVal*);
 
 #endif // L_H

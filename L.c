@@ -7,10 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dn_hashmap/dn_hashmap.h"
-#include "dn_hashmap/arena.h"
-#include "dn_hashmap/dn_string.h"
-#include "komihash.h"
+// NEW IMPORTS
+#include "L.h"
 
 /*
   The Idea of L.
@@ -143,66 +141,6 @@
  */
 // TODO, need a hierarchical hashmap for namespaces
 
-typedef struct LEnv {
-  HashMap symbol_table; // char* -> LType
-} LEnv;
-
-typedef struct LVal LVal;
-typedef struct LType LType;
-
-struct LType {
-  String name;
-  struct LType* parent;
-  uint16_t members_len;
-  struct LType** members;
-};
-
-#define SEED 0
-
-uint64_t String_hash(String str) {
-  return komihash(str.chars, str.length, SEED);
-}
-
-/*
-  We would store char some_func(int, bool) in LType as
-  name = some_func
-  parent = *function_pointer
-  members_len = 3
-  members = [*char, *int, *bool]
- */
-
-struct LVal {
-  enum {
-    LSymbol,
-    LString,
-    LNumber,
-    LCons,
-    LNil
-  } ltype;
-  union {
-    struct {
-      LVal* car;
-      LVal* cdr;
-    };
-    String symbol;
-    String string;
-    long long int number;  
-  };
-};
-
-typedef struct {
-  bool valid;
-  const char* mesg;
-} LErr;
-
-LVal cons(struct LVal* car, struct LVal* cdr) {
-  return (LVal){
-    .ltype = LCons,
-    .car = car,
-    .cdr = cdr
-  };
-}
-
 //# Parsing
 
 void print_ltype(LVal* lval) {
@@ -210,7 +148,7 @@ void print_ltype(LVal* lval) {
   case LSymbol:
     printf("symbol");
     break;
-  case LString:
+  case LLString:
     printf("string");
     break;
   case LNumber:
@@ -225,14 +163,14 @@ void print_ltype(LVal* lval) {
   }
 }
 
-void recur_print(Arena* arena, LVal* lval) {
+void recur_print(LVal* lval) {
   switch (lval->ltype) {
   case LSymbol:
-    printf("%s", String_cstring(arena, lval->symbol));
+		printf("%.*s", lval->symbol.length, lval->symbol.chars);
     fflush(stdout);
     break;
-  case LString:
-    printf("%s", String_cstring(arena, lval->string));
+  case LLString:
+		printf("%.*s", lval->symbol.length, lval->symbol.chars);
     fflush(stdout);
     break;
   case LNumber:
@@ -245,91 +183,11 @@ void recur_print(Arena* arena, LVal* lval) {
     break;
   case LCons:
     printf("<"); fflush(stdout);
-    recur_print(arena, lval->car);
+    recur_print(lval->car);
     printf(","); fflush(stdout);
-    recur_print(arena, lval->cdr);
+    recur_print(lval->cdr);
     printf(">"); fflush(stdout);
   }
-}
-
-//# Lexical Analysis
-
-#define INT "int"
-#define CHAR "char"
-#define BOOL "bool"
-#define NIL "nil"
-
-LEnv env_init(Arena* arena) {
-  // initialize with the basic types
-  HashMap symbol_table;
-  LType *nil_ptr;
-  LType new_type;
-  LEnv env;
-
-  LType *char_type, *char_ptr_type, *int_type;
-  
-  symbol_table = hm_init(sizeof(LType));
-
-  new_type.name = (String){.chars = NIL, .length=sizeof(NIL)-1};
-  new_type.members_len = 0;
-  nil_ptr = (LType*)hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-  nil_ptr->parent = nil_ptr;
-
-  new_type.name = (String){.chars = INT, .length=sizeof(INT)-1};
-  new_type.members_len = 0;
-  new_type.parent = nil_ptr;
-  int_type = hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-
-  new_type.name = (String){.chars = CHAR, .length=sizeof(CHAR)-1};
-  new_type.members_len = 0;
-  new_type.parent = nil_ptr;
-  char_type = hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-
-  new_type.name = (String){.chars = BOOL, .length=sizeof(BOOL)-1};
-  new_type.members_len = 0;
-  new_type.parent = nil_ptr;
-  hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-
-  // technically we can have char*********; so this should actually be generalized and the
-  // types for pointers should only be added during the analysis phase. (except maybe the first pointer type)
-
-  new_type.name = (String){.chars = "char*", .length=(sizeof("char*")-1)};
-  new_type.parent = char_type;
-  new_type.members_len = 1;
-  new_type.members = arena_alloc(arena, sizeof(LType*));
-  *new_type.members = int_type;
-  char_ptr_type = hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-
-  new_type.name = (String){.chars = "char**", .length=(sizeof("char**")-1)};
-  new_type.parent = char_ptr_type;
-  new_type.members_len = 1;
-  new_type.members = arena_alloc(arena, sizeof(LType*));
-  *new_type.members = int_type;
-  hm_put(&symbol_table, String_hash(new_type.name), &new_type);
-
-  // TODO: other base types
-
-  env.symbol_table = symbol_table;
-
-  return env;
-}
-
-LErr analyse_dec(Arena* arena, LEnv* env, LVal* lval);
-
-LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
-  while (lval && lval->ltype != LNil) {
-    if (lval->ltype == LCons) {
-      if (lval->car->ltype == LCons) {
-	if (lval->car->car->ltype == LSymbol) {
-	  if (String_cmp(lval->car->car->symbol, "dec")) {
-	    analyse_dec(arena, env, lval->car->cdr);
-	  }
-	}
-      }
-      lval = lval->cdr;
-    }
-  }
-  return (LErr){0};
 }
 
 int Llist_length(LVal* list) {
@@ -347,63 +205,6 @@ int Llist_length(LVal* list) {
     len++;
   }
   return len;
-}
-
-LType* symbol_table_get(LEnv* st, String name) {
-  return hm_get(&st->symbol_table, komihash(name.chars, name.length, SEED));
-}
-
-LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
-  // <f, <<int, <int, nil>>, <int, nil>>> == example setup
-  LType function_type;
-  LType* member_type;
-  LVal *params, *param, *return_param, *function_name;
-  int param_count, i;
-
-  params = first_cons->cdr->car;
-  param = params;
-  return_param = first_cons->cdr->cdr->car;
-  function_name = first_cons->car;
-
-  param_count = Llist_length(params);
-  
-  function_type.name = function_name->symbol;
-  function_type.members_len = param_count;
-  function_type.members = arena_alloc(arena, param_count*sizeof(LType*));
-
-  for (i = 0; i < param_count - 1; i++) {
-    if (param->car->ltype != LSymbol) { // TODO: error
-      printf("Expected type LSymbol but got ");
-      print_ltype(param->car);
-      printf("\n");
-    }
-
-    member_type = symbol_table_get(env, param->car->symbol);
-
-    if (!member_type) { // TODO: error
-      printf("Could not find type %s\n", String_cstring(arena, param->symbol));
-    }
-
-    function_type.members[i] = member_type;
-    param = param->cdr;
-  }
-  
-  if (param->ltype == LCons && param->car->ltype == LSymbol) {
-    member_type = symbol_table_get(env, param->car->symbol);
-    function_type.members[param_count-1] = member_type;
-  }// TODO: else error
-  
-
-  LType* return_type = symbol_table_get(env, return_param->symbol);
-
-  if (!return_type) { // TODO: error
-    printf("Could not find type %s\n", String_cstring(arena, param->symbol));
-  } else {
-    function_type.parent = return_type;
-  }
-
-  hm_put(&env->symbol_table, String_hash(function_type.name), &function_type);
-  return (LErr){0};
 }
 
 //# Code generation
@@ -425,7 +226,7 @@ void print_lval(int fd, LVal* lval) {
   case LNumber:
     dprintf(fd, "%lld", lval->number);
     break;
-  case LString:
+  case LLString:
     dprintf(fd, "\"%.*s\"", lval->string.length, lval->string.chars);
     break;
   default:
@@ -455,27 +256,27 @@ void compile(int fd, LEnv* env, LVal* lval) {
   while (lval->ltype != LNil && lval) {
     if (lval->ltype == LCons) {
       if (lval->car->ltype == LSymbol) {
-	if (String_cmp(lval->car->symbol, "+")) {
+	if (LString_cmp(lval->car->symbol, "+")) {
 	  compile_plus(fd, env, lval->cdr);
-	} else if (String_cmp(lval->car->symbol, "-")) {
+	} else if (LString_cmp(lval->car->symbol, "-")) {
 	  compile_minus(fd, env, lval->cdr);
-	} else if (String_cmp(lval->car->symbol, "def")) {
+	} else if (LString_cmp(lval->car->symbol, "def")) {
 	  compile_def(fd, env, lval->cdr);
-	} else if (String_cmp(lval->car->symbol, "let")){
+	} else if (LString_cmp(lval->car->symbol, "let")){
 	  compile_let(fd, env, lval->cdr);
-	} else if (String_cmp(lval->car->symbol, "*")){
+	} else if (LString_cmp(lval->car->symbol, "*")){
 	  compile_mul(fd, env, lval->cdr);
-	} else if (String_cmp(lval->car->symbol, "dec")){
+	} else if (LString_cmp(lval->car->symbol, "dec")){
 	  return;
-	} else if (String_cmp(lval->car->symbol, "return")){
+	} else if (LString_cmp(lval->car->symbol, "return")){
 	  //TODO: L code should not have to specify return.
 	  dprintf(fd, "return ");
 	  compile(fd, env, lval->cdr);
 	  dprintf(fd, ";\n");
 	} else {
-	  func_type = hm_get(&env->symbol_table, String_hash(lval->car->symbol));
+		func_type = env_lookup(env, lval->car->symbol);
 	  if (!func_type) {
-	    printf("unrecgonized symbol -> %s", String_cstring(NULL, lval->car->symbol));
+	    printf("unrecgonized symbol -> %.*s", lval->car->symbol.length, lval->car->symbol.chars);
 	  } else {
 	    dprintf(fd, "%.*s(", lval->car->symbol.length, lval->car->symbol.chars);
 	    print_comma_seperated_list(fd, lval->cdr);

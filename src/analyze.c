@@ -1,4 +1,6 @@
 #include "../L.h"
+#include "string.h"
+#include <stdio.h>
 
 LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
   while (lval && lval->ltype != LNil) {
@@ -14,23 +16,6 @@ LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
     }
   }
   return (LErr){0};
-}
-
-int Llist_length(LVal* list) {
-  int len = 0;
-  if (list->ltype != LCons) {
-    return 0;
-  }
-  while (list->cdr->ltype == LCons) {
-    if (list->car->ltype != LNil) {
-      len++;
-    }
-    list = list->cdr;
-  }
-  if (list->car->ltype != LNil) {
-    len++;
-  }
-  return len;
 }
 
 LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
@@ -58,10 +43,10 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
       printf("\n");
     }
 
-    member_type = symbol_table_get(env, param->car->symbol);
+		member_type = env_lookup(env, param->car->symbol);
 
-    if (!member_type) { // TODO: error
-      printf("Could not find type %s\n", String_cstring(arena, param->symbol));
+    if (!member_type) {
+      printf("Could not find type %.*s\n", param->symbol.length, param->symbol.chars);
     }
 
     function_type.members[i] = member_type;
@@ -69,19 +54,19 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
   }
   
   if (param->ltype == LCons && param->car->ltype == LSymbol) {
-    member_type = symbol_table_get(env, param->car->symbol);
+		member_type = env_lookup(env, param->car->symbol);
     function_type.members[param_count-1] = member_type;
   }// TODO: else error
   
 
-  LType* return_type = symbol_table_get(env, return_param->symbol);
+  LType* return_type = env_lookup(env, return_param->symbol);
 
-  if (!return_type) { // TODO: error
-    printf("Could not find type %s\n", String_cstring(arena, param->symbol));
+  if (!return_type) {
+    printf("Could not find type %.*s\n", param->symbol.length, param->symbol.chars);
   } else {
     function_type.parent = return_type;
   }
 
-  hm_put(&env->symbol_table, String_hash(function_type.name), &function_type);
+	env_put(env, function_type.name, function_type);
   return (LErr){0};
 }
