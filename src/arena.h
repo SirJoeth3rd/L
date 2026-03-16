@@ -24,21 +24,26 @@ typedef struct {
 	Originally stolen from Tsoding and then tortured.
  */
 
-typedef struct {
+typedef struct Region Region;
+
+struct Region {
 	void* buffer;
 	size_t balance;  //bytes already used
 	size_t capacity; //total bytes
-} Region;
+	Region *next;
+};
 
 typedef struct {
 	Region *start;
 	Region *end;
 } Arena;
 
-void arena_append_region(Arena*);
+void arena_append_region(Arena*,size_t);
 void* arena_alloc(Arena*, size_t);
 void arena_free(Arena*);
 Arena arena_init();
+
+#define PAGE_SIZE 4096
 
 #endif //ARENA_H
 
@@ -50,7 +55,7 @@ void* arena_alloc(Arena* arena, size_t bytes) {
 	if (bytes > PAGE_SIZE) {
 		arena_append_region(arena, bytes);
 	} else {
-		arena_append_region(arena, PAGE_SIZE)
+		arena_append_region(arena, PAGE_SIZE);
 	}
 
   ptr = arena->end->buffer + arena->end->balance;
@@ -112,12 +117,12 @@ void arena_free_(void* arena) {
 	arena_free((Arena*) arena);
 }
 
-void arena_allocator(Arena arena) {
+Allocator arena_allocator(Arena *arena) {
 	return (Allocator){
-		.self = *arena,
+		.self = (void*)arena,
 		.allocate = arena_alloc_,
 		.free = arena_free_,
-	}
+	};
 }
 
 #endif

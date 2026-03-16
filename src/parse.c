@@ -1,4 +1,6 @@
 #include "../L.h"
+#include <ctype.h>
+#include <stdlib.h>
 
 LVal* parse_number(Arena* arena, char** chr);
 LVal* parse_string(Arena* arena, char** chr);
@@ -77,7 +79,7 @@ LVal* parse_number(Arena* arena, char** chr) {
 
 LVal* parse_string(Arena* arena, char** chr) {
   LVal* lval;
-  int length;
+  int length = 0;
   bool escaped = false;
   char* starting_position;
 
@@ -95,8 +97,8 @@ LVal* parse_string(Arena* arena, char** chr) {
   }
 
   lval = arena_alloc(arena, sizeof(*lval));
-  lval->ltype = LString;
-  lval->string = (String) {
+  lval->ltype = LLString;
+  lval->string = (LString) {
     .chars = starting_position,
     .length = length
   };
@@ -118,7 +120,7 @@ LVal* parse_symbol(Arena* arena, char** chr) {
 
   lval = (LVal*)arena_alloc(arena, sizeof(*lval));
   lval->ltype = LSymbol;
-  lval->symbol = (String) {
+  lval->symbol = (LString) {
     .chars = start_position,
     .length = length
   };

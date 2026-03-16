@@ -49,7 +49,7 @@ LString String_from_cstring(char* chars) {
   return str;
 }
 
-bool LString_cmp(String str1, const char* cstr) {
+bool LString_cmp(LString str1, const char* cstr) {
   unsigned int i;
   for (i = 0; i < str1.length; i++) {
     if (cstr[i] == '\0') {
