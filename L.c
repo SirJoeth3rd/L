@@ -1,17 +1,10 @@
-#include <stdio.h>
-#include <ctype.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-
 // NEW IMPORTS
 #include "L.h"
-
+#include "src/environment.c"
 #include "src/parse.c"
 #include "src/analyze.c"
 #include "src/codegen.c"
-#include "src/environment.c"
+#include "tinycc/libtcc.h"
 
 #define ARENA_IMPLEMENTATION
 #include "src/arena.h"
@@ -117,7 +110,7 @@
        string-new))
  */
 
-/* Produced C code: don't TRY to make this readable.
+/* Produced C code: won't try to make this readable.
    But if it is well nice.
 
    int length(char* string) {
@@ -132,26 +125,13 @@
 */
 
 /*
-  The core unit of measurement of everything on a cpu is the byte.
-  Every other type can be reduced to a number of bytes and a name.
-  Off course you have some special names for frequent types like int, float etc
-  Types form chains whereby a type can inherit another type.
-
-  typedef int userid;
-
-  so userid has a ancestor type reference to int.
- */
-
-/*
   To actually generate code from this.
   1. Recursively expand all macros
   2. Find all decs
   3. Compile expanded code
  */
-// TODO, need a hierarchical hashmap for namespaces
 
 //# Parsing
-
 void print_ltype(LVal* lval) {
   switch (lval->ltype) {
   case LSymbol:
@@ -217,7 +197,6 @@ int Llist_length(LVal* list) {
 }
 
 //# Main
-
 char* read_file(const char* filename) {
   FILE* file;
   char* buffer, *bstart;
@@ -265,9 +244,8 @@ int main(int argc, char** argv) {
     perror("Error opening file\n");
     return EXIT_FAILURE;
   }
-
-  int fd = fileno(file);
-  compile(fd,&env,lexpr);
+	LSink filesink = lsink_file(file);
+  compile(filesink,&env,lexpr);
 
   fclose(file);
   free(lcode);

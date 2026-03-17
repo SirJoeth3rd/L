@@ -1,25 +1,56 @@
 #include "../L.h"
 #include <stdio.h>
+#include <stdarg.h>
 
-void print_lval(int, LVal*);
-void print_comma_seperated_list(int, LVal*);
-void compile_plus(int, LEnv*, LVal*);
-void compile_minus(int, LEnv*, LVal*);
-void compile_mul(int, LEnv*, LVal*);
-void compile_def(int, LEnv*, LVal*);
-void compile_let(int, LEnv*, LVal*);
-void compile(int, LEnv*, LVal*);
+void print_lval(LSink, LVal*);
+void print_comma_seperated_list(LSink, LVal*);
+void compile_plus(LSink, LEnv*, LVal*);
+void compile_minus(LSink, LEnv*, LVal*);
+void compile_mul(LSink, LEnv*, LVal*);
+void compile_def(LSink, LEnv*, LVal*);
+void compile_let(LSink, LEnv*, LVal*);
+void compile(LSink, LEnv*, LVal*);
 
-void print_lval(int fd, LVal* lval) {
+LSink lsink_buffer(LString string) {
+	return (LSink) {
+		.buffer = string,
+		.tag = LSink_Buffer
+	};
+}
+
+LSink lsink_file(FILE* file) {
+	return (LSink) {
+		.file = file,
+		.tag = LSink_File
+	};
+}
+
+int sinkprintf(LSink sink, const char* format, ...) {
+	va_list args;
+	int result;
+	va_start(args, format);
+	switch(sink.tag) {
+	case LSink_Buffer:
+		result = vsnprintf(sink.buffer.chars, sink.buffer.length, format, args);
+		break;
+	case LSink_File:
+		result = vfprintf(sink.file, format, args);
+		break;
+	}
+	va_end(args);
+	return result;
+}
+
+void print_lval(LSink sink, LVal* lval) {
   switch(lval->ltype) {
   case LSymbol:
-    dprintf(fd, "%.*s", lval->symbol.length, lval->symbol.chars);
+    sinkprintf(sink, "%.*s", lval->symbol.length, lval->symbol.chars);
     break;
   case LNumber:
-    dprintf(fd, "%lld", lval->number);
+    sinkprintf(sink, "%lld", lval->number);
     break;
   case LLString:
-    dprintf(fd, "\"%.*s\"", lval->string.length, lval->string.chars);
+    sinkprintf(sink, "\"%.*s\"", lval->string.length, lval->string.chars);
     break;
   default:
     printf("tried to print lval of type ");
@@ -29,95 +60,95 @@ void print_lval(int fd, LVal* lval) {
   }
 }
 
-void print_comma_seperated_list(int fd, LVal* list) {
+void print_comma_seperated_list(LSink sink, LVal* list) {
   int i, length;
   length = Llist_length(list);
   for (i = 0; i < length - 1; i++) {
-    print_lval(fd, list->car);
+    print_lval(sink, list->car);
     list = list->cdr;
   }
   if (length > 0) {
-    print_lval(fd, list->car);
+    print_lval(sink, list->car);
   }
 }
 
-void compile(int fd, LEnv* env, LVal* lval) {
+void compile(LSink sink, LEnv* env, LVal* lval) {
   //(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>
   LType* func_type;
 
   while (lval->ltype != LNil && lval) {
     if (lval->ltype == LCons) {
       if (lval->car->ltype == LSymbol) {
-	if (LString_cmp(lval->car->symbol, "+")) {
-	  compile_plus(fd, env, lval->cdr);
-	} else if (LString_cmp(lval->car->symbol, "-")) {
-	  compile_minus(fd, env, lval->cdr);
-	} else if (LString_cmp(lval->car->symbol, "def")) {
-	  compile_def(fd, env, lval->cdr);
-	} else if (LString_cmp(lval->car->symbol, "let")){
-	  compile_let(fd, env, lval->cdr);
-	} else if (LString_cmp(lval->car->symbol, "*")){
-	  compile_mul(fd, env, lval->cdr);
-	} else if (LString_cmp(lval->car->symbol, "dec")){
-	  return;
-	} else if (LString_cmp(lval->car->symbol, "return")){
-	  //TODO: L code should not have to specify return.
-	  dprintf(fd, "return ");
-	  compile(fd, env, lval->cdr);
-	  dprintf(fd, ";\n");
-	} else {
-		func_type = env_lookup(env, lval->car->symbol);
-	  if (!func_type) {
-	    printf("unrecgonized symbol -> %.*s", lval->car->symbol.length, lval->car->symbol.chars);
-	  } else {
-	    dprintf(fd, "%.*s(", lval->car->symbol.length, lval->car->symbol.chars);
-	    print_comma_seperated_list(fd, lval->cdr);
-	    dprintf(fd, ")");
-	  }
-	}
-	// compile_... will consume the entire list ie we can exit out of compile
-	return;
+				if (LString_cmp(lval->car->symbol, "+")) {
+					compile_plus(sink, env, lval->cdr);
+				} else if (LString_cmp(lval->car->symbol, "-")) {
+					compile_minus(sink, env, lval->cdr);
+				} else if (LString_cmp(lval->car->symbol, "def")) {
+					compile_def(sink, env, lval->cdr);
+				} else if (LString_cmp(lval->car->symbol, "let")){
+					compile_let(sink, env, lval->cdr);
+				} else if (LString_cmp(lval->car->symbol, "*")){
+					compile_mul(sink, env, lval->cdr);
+				} else if (LString_cmp(lval->car->symbol, "dec")){
+					return;
+				} else if (LString_cmp(lval->car->symbol, "return")){
+					//TODO: L code should not have to specify return.
+					sinkprintf(sink, "return ");
+					compile(sink, env, lval->cdr);
+					sinkprintf(sink, ";\n");
+				} else {
+					func_type = env_lookup(env, lval->car->symbol);
+					if (!func_type) {
+						printf("unrecgonized symbol -> %.*s", lval->car->symbol.length, lval->car->symbol.chars);
+					} else {
+						sinkprintf(sink, "%.*s(", lval->car->symbol.length, lval->car->symbol.chars);
+						print_comma_seperated_list(sink, lval->cdr);
+						sinkprintf(sink, ")");
+					}
+				}
+				// compile_... will consume the entire list ie we can exit out of compile
+				return;
       } else if (lval->car->ltype == LCons) {
-	compile(fd, env, lval->car);
+				compile(sink, env, lval->car);
       }
       lval = lval->cdr;
     }
   }
 }
 
-void compile_plus(int fd, LEnv* env, LVal* lval) {
+void compile_plus(LSink sink, LEnv* env, LVal* lval) {
   //(+ x y z)
   while (lval->cdr->ltype == LCons) {
     // TODO: assuming here that the type is symbol
-    dprintf(fd, "%.*s + ", lval->car->symbol.length, lval->car->symbol.chars);
+    sinkprintf(sink, "%.*s + ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
-  dprintf(fd, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
+  sinkprintf(sink, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
 }
 
-void compile_minus(int fd, LEnv* env, LVal* lval) {
+void compile_minus(LSink sink, LEnv* env, LVal* lval) {
   //(+ x y z)
   while (lval->cdr->ltype == LCons) {
     // TODO: assuming here that the type is symbol
-    dprintf(fd, "%.*s - ", lval->car->symbol.length, lval->car->symbol.chars);
+    sinkprintf(sink, "%.*s - ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
-  dprintf(fd, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
+  sinkprintf(sink, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
 }
 
-void compile_mul(int fd, LEnv* env, LVal* lval) {
+void compile_mul(LSink sink, LEnv* env, LVal* lval) {
   //(+ x y z)
   while (lval->cdr->ltype == LCons) {
     // TODO: assuming here that the type is symbol
-    dprintf(fd, "%.*s * ", lval->car->symbol.length, lval->car->symbol.chars);
+    sinkprintf(sink, "%.*s * ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
-  dprintf(fd, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
+  sinkprintf(sink, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
 }
 
-void compile_def(int fd, LEnv* env, LVal* lval) {
+void compile_def(LSink sink, LEnv* env, LVal* lval) {
   //<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>
-  //TODO: need to actually type check here
+  //TODO: Type Checking Here? Or earlier in analysis.
   LVal* func_name, *args, *body;
   LType* func_type;
   int i;
@@ -128,28 +159,28 @@ void compile_def(int fd, LEnv* env, LVal* lval) {
 
   func_type = env_lookup(env, func_name->symbol);
 
-  dprintf(fd, "%.*s ", func_type->parent->name.length, func_type->parent->name.chars);
-  dprintf(fd, "%.*s(", func_name->symbol.length, func_name->symbol.chars);
+  sinkprintf(sink, "%.*s ", func_type->parent->name.length, func_type->parent->name.chars);
+  sinkprintf(sink, "%.*s(", func_name->symbol.length, func_name->symbol.chars);
 
   for (i = 0; i < func_type->members_len - 1; i++) {
-    dprintf(fd, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
-    dprintf(fd, "%.*s,", args->car->symbol.length, args->car->symbol.chars);
+    sinkprintf(sink, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
+    sinkprintf(sink, "%.*s,", args->car->symbol.length, args->car->symbol.chars);
     args = args->cdr;
   }
 
   if (func_type->members_len) {
-    dprintf(fd, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
-    dprintf(fd, "%.*s) {\n", args->car->symbol.length, args->car->symbol.chars);
+    sinkprintf(sink, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
+    sinkprintf(sink, "%.*s) {\n", args->car->symbol.length, args->car->symbol.chars);
   }
 
   // TODO: update env to include function local variables
 
-  compile(fd, env, body);
+  compile(sink, env, body);
   
-  dprintf(fd, "}\n");
+  sinkprintf(sink, "}\n");
 }
 
-void compile_let(int fd, LEnv* env, LVal* lval) {
+void compile_let(LSink sink, LEnv* env, LVal* lval) {
   /* <<let,<<<x,<int,nil>>,<<y,<char,nil>>,nil>>,<<+,<x,<y,nil>>>,nil>>>,nil> */
   LVal* var_pairs, *body, *var_pair, *var_name, *var_type_symbol;
   int i, total_pairs;
@@ -157,7 +188,7 @@ void compile_let(int fd, LEnv* env, LVal* lval) {
   var_pairs = lval->car;
   body = lval->cdr;
 
-  dprintf(fd, "{");
+  sinkprintf(sink, "{");
 
   total_pairs = Llist_length(var_pairs);
   for (i = 0; i < total_pairs; i++) {
@@ -165,11 +196,11 @@ void compile_let(int fd, LEnv* env, LVal* lval) {
     var_name = var_pair->car;
     var_type_symbol = var_pair->cdr->car;
 
-    dprintf(fd, "%.*s ", var_type_symbol->symbol.length, var_type_symbol->symbol.chars);
-    dprintf(fd, "%.*s;\n", var_name->symbol.length, var_name->symbol.chars);
+    sinkprintf(sink, "%.*s ", var_type_symbol->symbol.length, var_type_symbol->symbol.chars);
+    sinkprintf(sink, "%.*s;\n", var_name->symbol.length, var_name->symbol.chars);
     var_pairs = var_pairs->cdr;
   }
   
-  compile(fd, env, body);
-  dprintf(fd, "}");
+  compile(sink, env, body);
+  sinkprintf(sink, "}");
 }

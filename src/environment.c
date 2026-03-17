@@ -7,6 +7,9 @@
 	The Environment stores a tree of types, each type has a parent type
 	to which that type can be casted (at the cost of losing information)
 	For example int* -> int, and everything to nil including itself.
+
+	TODO: LEnv needs to be a hierarchical hashmap because we need to be able
+	to store typeinformation inside lets and function definitions.
  */
 
 #define MAX_PRIME_INDEX 20
@@ -150,7 +153,6 @@ LEnv env_init(Arena* arena) {
   env.capacity = PRIMES[env.prime_index];
   env.keys = calloc(env.capacity, sizeof(LType));
 	env.balance = 0;
-  return env;
 
   new_type.name = (LString){.chars = NIL, .length=sizeof(NIL)-1};
   new_type.members_len = 0;
@@ -160,7 +162,7 @@ LEnv env_init(Arena* arena) {
   new_type.name = (LString){.chars = INT, .length=sizeof(INT)-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  env_put(&env, new_type.name, new_type);
+  int_type = env_put(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = CHAR, .length=sizeof(CHAR)-1};
   new_type.members_len = 0;
@@ -180,7 +182,7 @@ LEnv env_init(Arena* arena) {
   new_type.members_len = 1;
   new_type.members = arena_alloc(arena, sizeof(LType*));
   *new_type.members = int_type;
-  env_put(&env, new_type.name, new_type);
+  char_ptr_type = env_put(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = "char**", .length=(sizeof("char**")-1)};
   new_type.parent = char_ptr_type;

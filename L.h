@@ -2,8 +2,10 @@
 #define L_H
 
 #include <stdint.h>
-#include "src/arena.h"
 #include <stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include "src/arena.h"
 #include "src/string.h"
 
 typedef struct {
@@ -55,6 +57,7 @@ typedef struct LEnv {
 	unsigned int balance;
 } LEnv;
 
+
 LEnv env_init(Arena*);
 LType* env_lookup(LEnv*, LString);
 LType* env_put(LEnv*, LString, LType);
@@ -75,6 +78,18 @@ LErr analyse_dec(Arena*, LEnv*, LVal*);
 LErr analyse(Arena*, LEnv*, LVal*); // add type info
 
 // Code Gen
-void compile(int, LEnv*, LVal*);
+
+// Sometimes we want to write the code to a file, sometimes to a buffer.
+typedef struct {
+	union {
+		FILE* file;
+		LString buffer;
+	};
+	enum {LSink_File, LSink_Buffer} tag;
+} LSink;
+
+LSink lsink_buffer(LString);
+LSink lsink_file(FILE*);
+void compile(LSink, LEnv*, LVal*);
 
 #endif // L_H
