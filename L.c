@@ -1,4 +1,5 @@
-/* NEW IMPORTS */
+#define _GNU_SOURCE
+
 #include "L.h"
 #include "src/environment.c"
 #include "src/parse.c"
@@ -11,6 +12,9 @@
 
 #define L_STRING_IMPLEMENTATION
 #include "src/lstring.h"
+
+#include <stdio.h>
+#include <string.h>
 
 /*
   The Idea of L.
@@ -224,6 +228,11 @@ char* read_file(const char* filename) {
   return bstart;
 }
 
+void handle_error(void *opaque, const char *msg)
+{
+    fprintf(opaque, "%s\n", msg);
+}
+
 int main(int argc, char** argv) {
   char *lcode_ptr, *lcode;
   LEnv env;
@@ -234,8 +243,6 @@ int main(int argc, char** argv) {
   lcode_ptr = lcode;
   LVal* lexpr = parse(&tmp_arena, &lcode_ptr);
 
-  recur_print(lexpr);printf("\n");
-
   env = env_init(&tmp_arena);
   analyse(&tmp_arena, &env, lexpr);
 
@@ -244,19 +251,45 @@ int main(int argc, char** argv) {
     perror("Error opening file\n");
     return EXIT_FAILURE;
   }
-	LSink filesink = lsink_file(file);
-  compile(filesink,&env,lexpr);
+  compile(file,&env,lexpr);
+	fclose(file);
 
-	LString string = (LString){.chars = (char*)arena_alloc(&tmp_arena, 1000), .length = 1000};
-	LSink buff_sink = lsink_buffer(string);
-	compile(buff_sink, &env, lexpr);
+	char buffer[1000] = {0};
+	FILE* buffile = fmemopen(buffer, sizeof(buffer), "w");
+	compile(buffile, &env, lexpr);
+	fclose(buffile);
 
-	sprintf("%s\n", buff_sink.buffer.chars, buff_sink.buffer.length);
+	printf("%s\n", buffer);
 
 	TCCState* tcc_state;
 	tcc_state = tcc_new();
- 
-  fclose(file);
+	if (!tcc_state) {
+		fprintf(stderr, "Could not create tcc state\n");
+		exit(1);
+	}
+
+	tcc_set_error_func(tcc_state, stderr, handle_error);
+	tcc_set_output_type(tcc_state, TCC_OUTPUT_MEMORY);
+
+	if (tcc_compile_string(tcc_state, buffer) == -1) {
+		exit(1);
+	}
+
+	if (tcc_relocate(tcc_state) < 0) {
+		exit(1);
+	}
+
+	int (*main_func)(int);
+	main_func = tcc_get_symbol(tcc_state, "trippies");
+	if (!main_func) {
+		exit(2);
+	}
+
+	int result = main_func(3);
+	printf("result = %i\n", result);
+
+	tcc_delete(tcc_state);
+
   free(lcode);
   arena_free(&tmp_arena);
   return 0;

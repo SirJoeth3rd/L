@@ -1,5 +1,4 @@
 (dec sqr (int) int)
-
 (def sqr (x)
   (return (* x x)))
 

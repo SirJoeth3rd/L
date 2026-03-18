@@ -79,17 +79,6 @@ LErr analyse(Arena*, LEnv*, LVal*); /* add type info*/
 
 /* Code Gen */
 
-/* Sometimes we want to write the code to a file, sometimes to a buffer.*/
-typedef struct {
-	union {
-		FILE* file;
-		LString buffer;
-	};
-	enum {LSink_File, LSink_Buffer} tag;
-} LSink;
-
-LSink lsink_buffer(LString);
-LSink lsink_file(FILE*);
-void compile(LSink, LEnv*, LVal*);
+void compile(FILE*, LEnv*, LVal*);
 
 #endif /* L_H */
