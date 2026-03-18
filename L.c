@@ -247,6 +247,15 @@ int main(int argc, char** argv) {
 	LSink filesink = lsink_file(file);
   compile(filesink,&env,lexpr);
 
+	LString string = (LString){.chars = (char*)arena_alloc(&tmp_arena, 1000), .length = 1000};
+	LSink buff_sink = lsink_buffer(string);
+	compile(buff_sink, &env, lexpr);
+
+	sprintf("%s\n", buff_sink.buffer.chars, buff_sink.buffer.length);
+
+	TCCState* tcc_state;
+	tcc_state = tcc_new();
+ 
   fclose(file);
   free(lcode);
   arena_free(&tmp_arena);
