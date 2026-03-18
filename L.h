@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "src/arena.h"
-#include "src/string.h"
+#include "src/lstring.h"
 
 typedef struct {
   bool valid;
@@ -48,7 +48,7 @@ typedef struct {
 	uint8_t distance;
 } LEnvKey;
 
-// LEnv is fundamentally just a hashmap that keeps track of all symbols types.
+/* LEnv is fundamentally just a hashmap that keeps track of all symbols types. */
 
 typedef struct LEnv {
 	LEnvKey* keys;
@@ -64,22 +64,22 @@ LType* env_put(LEnv*, LString, LType);
 void env_delete(LEnv*, LString);
 void env_resize(LEnv*);
 
-// Helpers
+/* Helpers*/
 void print_ltype(LVal*);
 LVal cons(LVal*, LVal*);
 void recur_print(LVal*);
 int Llist_length(LVal*);
 
-// Parser 
-LVal* parse(Arena*, char**); // parse to lval
+/* Parser */
+LVal* parse(Arena*, char**); /* parse to lval*/
 
-// Analysis
+/* Analysis */
 LErr analyse_dec(Arena*, LEnv*, LVal*); 
-LErr analyse(Arena*, LEnv*, LVal*); // add type info
+LErr analyse(Arena*, LEnv*, LVal*); /* add type info*/
 
-// Code Gen
+/* Code Gen */
 
-// Sometimes we want to write the code to a file, sometimes to a buffer.
+/* Sometimes we want to write the code to a file, sometimes to a buffer.*/
 typedef struct {
 	union {
 		FILE* file;
@@ -92,4 +92,4 @@ LSink lsink_buffer(LString);
 LSink lsink_file(FILE*);
 void compile(LSink, LEnv*, LVal*);
 
-#endif // L_H
+#endif /* L_H */

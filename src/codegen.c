@@ -73,7 +73,7 @@ void print_comma_seperated_list(LSink sink, LVal* list) {
 }
 
 void compile(LSink sink, LEnv* env, LVal* lval) {
-  //(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>
+  /*(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>*/
   LType* func_type;
 
   while (lval->ltype != LNil && lval) {
@@ -92,7 +92,7 @@ void compile(LSink sink, LEnv* env, LVal* lval) {
 				} else if (LString_cmp(lval->car->symbol, "dec")){
 					return;
 				} else if (LString_cmp(lval->car->symbol, "return")){
-					//TODO: L code should not have to specify return.
+					/*TODO: L code should not have to specify return.*/
 					sinkprintf(sink, "return ");
 					compile(sink, env, lval->cdr);
 					sinkprintf(sink, ";\n");
@@ -106,7 +106,7 @@ void compile(LSink sink, LEnv* env, LVal* lval) {
 						sinkprintf(sink, ")");
 					}
 				}
-				// compile_... will consume the entire list ie we can exit out of compile
+				/* compile_... will consume the entire list ie we can exit out of compile*/
 				return;
       } else if (lval->car->ltype == LCons) {
 				compile(sink, env, lval->car);
@@ -117,9 +117,9 @@ void compile(LSink sink, LEnv* env, LVal* lval) {
 }
 
 void compile_plus(LSink sink, LEnv* env, LVal* lval) {
-  //(+ x y z)
+  /*(+ x y z)*/
   while (lval->cdr->ltype == LCons) {
-    // TODO: assuming here that the type is symbol
+    /* TODO: assuming here that the type is symbol*/
     sinkprintf(sink, "%.*s + ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
@@ -127,9 +127,9 @@ void compile_plus(LSink sink, LEnv* env, LVal* lval) {
 }
 
 void compile_minus(LSink sink, LEnv* env, LVal* lval) {
-  //(+ x y z)
+  /*(+ x y z)*/
   while (lval->cdr->ltype == LCons) {
-    // TODO: assuming here that the type is symbol
+    /* TODO: assuming here that the type is symbol*/
     sinkprintf(sink, "%.*s - ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
@@ -137,9 +137,9 @@ void compile_minus(LSink sink, LEnv* env, LVal* lval) {
 }
 
 void compile_mul(LSink sink, LEnv* env, LVal* lval) {
-  //(+ x y z)
+  /*(+ x y z)*/
   while (lval->cdr->ltype == LCons) {
-    // TODO: assuming here that the type is symbol
+    /* TODO: assuming here that the type is symbol*/
     sinkprintf(sink, "%.*s * ", lval->car->symbol.length, lval->car->symbol.chars);
     lval = lval->cdr;
   }
@@ -147,8 +147,8 @@ void compile_mul(LSink sink, LEnv* env, LVal* lval) {
 }
 
 void compile_def(LSink sink, LEnv* env, LVal* lval) {
-  //<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>
-  //TODO: Type Checking Here? Or earlier in analysis.
+  /*<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>*/
+  /*TODO: Type Checking Here? Or earlier in analysis.*/
   LVal* func_name, *args, *body;
   LType* func_type;
   int i;
@@ -173,7 +173,7 @@ void compile_def(LSink sink, LEnv* env, LVal* lval) {
     sinkprintf(sink, "%.*s) {\n", args->car->symbol.length, args->car->symbol.chars);
   }
 
-  // TODO: update env to include function local variables
+  /* TODO: update env to include function local variables*/
 
   compile(sink, env, body);
   

@@ -40,18 +40,18 @@ LVal* parse(Arena* arena, char** chr) {
     if (isdigit(**chr)) {
       lval->car = parse_number(arena, chr);
     } else {
-      // if not anything else it's a symbol
+      /* if not anything else it's a symbol*/
       lval->car = parse_symbol(arena, chr);
     }
     
-    // append the new <value_here, next cons>
+    /* append the new <value_here, next cons>*/
   post_symbol:
     lval->cdr = (LVal*)arena_alloc(arena, sizeof(*lval));
     lval = lval->cdr;
     lval->ltype = LCons;
   }
 
-  // getting here -> reached end of input -> current lval = Nil
+  /* getting here -> reached end of input -> current lval = Nil*/
   lval->ltype = LNil;
 
  exit_parse:
@@ -106,7 +106,7 @@ LVal* parse_string(Arena* arena, char** chr) {
 }
 
 LVal* parse_symbol(Arena* arena, char** chr) {
-  //TODO: could be a litte more advanced
+  /*TODO: could be a litte more advanced*/
   LVal* lval;
   int length;
   char* start_position;

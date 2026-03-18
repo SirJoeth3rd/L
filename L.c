@@ -1,4 +1,4 @@
-// NEW IMPORTS
+/* NEW IMPORTS */
 #include "L.h"
 #include "src/environment.c"
 #include "src/parse.c"
@@ -10,7 +10,7 @@
 #include "src/arena.h"
 
 #define L_STRING_IMPLEMENTATION
-#include "src/string.h"
+#include "src/lstring.h"
 
 /*
   The Idea of L.
@@ -131,7 +131,7 @@
   3. Compile expanded code
  */
 
-//# Parsing
+/* # Parsing */
 void print_ltype(LVal* lval) {
   switch (lval->ltype) {
   case LSymbol:
@@ -196,7 +196,7 @@ int Llist_length(LVal* list) {
   return len;
 }
 
-//# Main
+/* # Main */
 char* read_file(const char* filename) {
   FILE* file;
   char* buffer, *bstart;
@@ -207,7 +207,7 @@ char* read_file(const char* filename) {
   fseek(file, 0L, SEEK_END);
   filesize = ftell(file);
 
-  // move file pointer back to start
+  /*  move file pointer back to start */
   fseek(file, 0, SEEK_SET);
 
   bstart = malloc(filesize*sizeof(char));

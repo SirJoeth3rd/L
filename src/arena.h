@@ -28,8 +28,8 @@ typedef struct Region Region;
 
 struct Region {
 	void* buffer;
-	size_t balance;  //bytes already used
-	size_t capacity; //total bytes
+	size_t balance;  /*bytes already used*/
+	size_t capacity; /*total bytes*/
 	Region *next;
 };
 
@@ -45,7 +45,7 @@ Arena arena_init();
 
 #define PAGE_SIZE 4096
 
-#endif //ARENA_H
+#endif /*ARENA_H*/
 
 #ifdef ARENA_IMPLEMENTATION
 

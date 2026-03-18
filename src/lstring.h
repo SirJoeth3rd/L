@@ -22,7 +22,7 @@ char* LString_cstring(Arena*, LString);
 LString String_from_cstring(char*);
 bool LString_cmp(LString, const char*);
 
-#endif // L_STRING_H
+#endif /* L_STRING_H*/
 
 #ifdef L_STRING_IMPLEMENTATION
 
@@ -70,14 +70,14 @@ LString LString_cpy_in(LString str, char* buffer) {
   unsigned int buffer_len;
   buffer_len = strlen(buffer);
   if (buffer_len > str.length) {
-    // TODO: error here
+    /* TODO: error here*/
   }
   strcpy(str.chars, buffer);
   return str;
 }
 
 LString LString_append(LString str, LString app) {
-  //TODO: fix (if my underlying chars is empty on the end just use that instead)
+  /*TODO: fix (if my underlying chars is empty on the end just use that instead)*/
   LString new_string;
   new_string.length = str.length + app.length;
   new_string.chars = malloc(sizeof(char)*new_string.length);
@@ -88,7 +88,7 @@ LString LString_append(LString str, LString app) {
 
 LString LString_subslice(LString str, int start, int end) {
   LString new_string;
-  //TODO: dew it
+  /*TODO: dew it*/
 }
 
-#endif // L_LString
+#endif /* L_LString*/

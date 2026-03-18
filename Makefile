@@ -1,2 +1,2 @@
 build:
-	gcc L.c -g -std=c99
+	gcc L.c -g -ansi

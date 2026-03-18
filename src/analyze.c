@@ -2,7 +2,7 @@
 #include "string.h"
 #include <stdio.h>
 
-LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
+LErr analyse(Arena* arena, LEnv* env, LVal* lval) { /* (dec f (int int) int))*/
   while (lval && lval->ltype != LNil) {
     if (lval->ltype == LCons) {
       if (lval->car->ltype == LCons) {
@@ -19,7 +19,7 @@ LErr analyse(Arena* arena, LEnv* env, LVal* lval) { // (dec f (int int) int))
 }
 
 LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
-  // <f, <<int, <int, nil>>, <int, nil>>> == example setup
+  /* <f, <<int, <int, nil>>, <int, nil>>> == example setup*/
   LType function_type;
   LType* member_type;
   LVal *params, *param, *return_param, *function_name;
@@ -37,7 +37,7 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
   function_type.members = arena_alloc(arena, param_count*sizeof(LType*));
 
   for (i = 0; i < param_count - 1; i++) {
-    if (param->car->ltype != LSymbol) { // TODO: error
+    if (param->car->ltype != LSymbol) { /* TODO: error*/
       printf("Expected type LSymbol but got ");
       print_ltype(param->car);
       printf("\n");
@@ -56,7 +56,7 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
   if (param->ltype == LCons && param->car->ltype == LSymbol) {
 		member_type = env_lookup(env, param->car->symbol);
     function_type.members[param_count-1] = member_type;
-  }// TODO: else error
+  }/* TODO: else error*/
   
 
   LType* return_type = env_lookup(env, return_param->symbol);
