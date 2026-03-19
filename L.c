@@ -233,6 +233,70 @@ void handle_error(void *opaque, const char *msg)
     fprintf(opaque, "%s\n", msg);
 }
 
+void pretty_print(LVal* val, int indent_level) {
+  if (!val) {
+    printf("null");
+    return;
+  }
+  
+  // Print indentation
+  for (int i = 0; i < indent_level; i++) {
+    printf("  ");
+  }
+  
+  switch (val->ltype) {
+	case LCons: {
+		LVal* current = val;
+      
+		if (current->cdr && current->cdr->ltype == LNil) {
+			// Single element list: (car)
+			printf("(");
+			pretty_print(current->car, 0);
+			printf(")");
+		} 
+		else if (current->cdr && current->cdr->ltype == LCons) {
+			// Proper list with multiple elements
+			printf("(\n");
+        
+			// Print each element
+			while (current && current->ltype == LCons) {
+				pretty_print(current->car, indent_level + 1);
+				printf("\n");
+				current = current->cdr;
+			}
+        
+			// Check if we ended properly (with nil)
+			if (current && current->ltype != LNil) {
+				// Dotted pair at the end
+				for (int i = 0; i < indent_level + 1; i++) {
+					printf("  ");
+				}
+				printf(". ");
+				pretty_print(current, indent_level + 1);
+				printf("\n");
+			}
+        
+			// Print closing parenthesis with proper indentation
+			for (int i = 0; i < indent_level; i++) {
+				printf("  ");
+			}
+			printf(")");
+		}
+		else {
+			// Dotted pair: (car . cdr)
+			printf("(");
+			pretty_print(val->car, 0);
+			printf(" . ");
+			pretty_print(val->cdr, 0);
+			printf(")");
+		}
+		break;
+	}
+	default:
+		print_lval(stdout, val);
+	}
+}
+
 int main(int argc, char** argv) {
   char *lcode_ptr, *lcode;
   LEnv env;
@@ -242,6 +306,8 @@ int main(int argc, char** argv) {
   lcode = read_file("./code.l");
   lcode_ptr = lcode;
   LVal* lexpr = parse(&tmp_arena, &lcode_ptr);
+
+	pretty_print(lexpr, 0);
 
   env = env_init(&tmp_arena);
   analyse(&tmp_arena, &env, lexpr);
@@ -282,6 +348,7 @@ int main(int argc, char** argv) {
 	int (*main_func)(int);
 	main_func = tcc_get_symbol(tcc_state, "trippies");
 	if (!main_func) {
+		printf("Could not find symbol\n");
 		exit(2);
 	}
 

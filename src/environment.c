@@ -237,12 +237,12 @@ LEnv env_init(Arena* arena) {
   new_type.name = (LString){.chars = INT, .length=sizeof(INT)-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  int_type = env_put(&env, new_type.name, new_type);
+  int_type = (LType*)env_put(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = CHAR, .length=sizeof(CHAR)-1};
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  char_type = env_put(&env, new_type.name, new_type);
+  char_type = (LType*)env_put(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = BOOL, .length=sizeof(BOOL)-1};
   new_type.members_len = 0;
@@ -257,7 +257,7 @@ LEnv env_init(Arena* arena) {
   new_type.members_len = 1;
   new_type.members = arena_alloc(arena, sizeof(LType*));
   *new_type.members = int_type;
-  char_ptr_type = env_put(&env, new_type.name, new_type);
+  char_ptr_type = (LType*)env_put(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = "char**", .length=(sizeof("char**")-1)};
   new_type.parent = char_ptr_type;
