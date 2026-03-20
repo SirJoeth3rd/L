@@ -2,6 +2,19 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+/*
+	A problem. How to represent the empty list? ().
+	Some options.
+	1. Nil in car position -> empty list.
+	  (dec f () int) => <dec, <f, <nil, <int, nil>>>>
+		                           _ -> nil in car implies empty list.
+															 nil in cdr implies end of list.
+		(concat () ()) => <concat, <nil, <nil, nil>>>
+
+	Actually this looks like it will work let's try it out. 
+	
+ */
+
 LVal* parse_number(Arena* arena, char** chr);
 LVal* parse_string(Arena* arena, char** chr);
 LVal* parse_symbol(Arena* arena, char** chr);

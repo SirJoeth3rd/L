@@ -17,17 +17,9 @@
 #include <string.h>
 
 /*
-  The Idea of L.
-  There are 2 powerful ideas in computer science.
-  1. Lexical Analysis and Transformation
-    Macros
-  2. Semantic Analysis and Transformation
-    Type checking
-
-  The current modern movement in programming languages is to attempt
-  to unify these ideas elegantly, for example Zig. This is another
-  attempt in the form of a lisp. The major idea of this language is to
-  try and make all compiler internals available at runtime.
+  The idea of L.
+	I love 2 programming languages, C and lisp.
+	L is attempt to unify these programming languages. 
  */
 
 /*
@@ -114,18 +106,19 @@
        string-new))
  */
 
-/* Produced C code: won't try to make this readable.
-   But if it is well nice.
+/*
+	Produced C code: won't try to make this readable.
+	But if it is well nice.
 
-   int length(char* string) {
-     int total;
-     char chr;
-     total = 0;
-     for (chr = string[0]; chr++; chr != 0) {
-       total++;
-     }
-     return total;
-   }
+	int length(char* string) {
+	  int total;
+	  char chr;
+	  total = 0;
+	  for (chr = string[0]; chr++; chr != 0) {
+	  total++;
+	}
+	  return total;
+	}
 */
 
 /*
@@ -308,6 +301,9 @@ int main(int argc, char** argv) {
   LVal* lexpr = parse(&tmp_arena, &lcode_ptr);
 
 	pretty_print(lexpr, 0);
+	printf("\n");
+	recur_print(lexpr);
+	printf("\n");
 
   env = env_init(&tmp_arena);
   analyse(&tmp_arena, &env, lexpr);

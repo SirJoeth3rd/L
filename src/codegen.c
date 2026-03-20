@@ -1,6 +1,7 @@
 #include "../L.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 void print_lval(FILE*, LVal*);
 void print_comma_seperated_list(FILE*, LVal*);
@@ -46,9 +47,10 @@ void compile(FILE* file, LEnv* env, LVal* lval) {
   /*(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>*/
   LType* func_type;
 
-  while (lval->ltype != LNil && lval) {
-    if (lval->ltype == LCons) {
-      if (lval->car->ltype == LSymbol) {
+	while (lval) {
+		switch (lval->ltype) {
+		case LCons:
+			if (lval->car->ltype == LSymbol) {
 				if (LString_cmp(lval->car->symbol, "+")) {
 					compile_plus(file, env, lval->cdr);
 				} else if (LString_cmp(lval->car->symbol, "-")) {
@@ -70,6 +72,7 @@ void compile(FILE* file, LEnv* env, LVal* lval) {
 					func_type = env_lookup(env, lval->car->symbol);
 					if (!func_type) {
 						printf("unrecgonized symbol -> %.*s", lval->car->symbol.length, lval->car->symbol.chars);
+						exit(1);
 					} else {
 						fprintf(file, "%.*s(", lval->car->symbol.length, lval->car->symbol.chars);
 						print_comma_seperated_list(file, lval->cdr);
@@ -77,13 +80,20 @@ void compile(FILE* file, LEnv* env, LVal* lval) {
 					}
 				}
 				/* compile_... will consume the entire list ie we can exit out of compile*/
+				compile(file, env, lval->car);
 				return;
       } else if (lval->car->ltype == LCons) {
 				compile(file, env, lval->car);
       }
       lval = lval->cdr;
-    }
-  }
+			break;
+		case LNil:
+			goto end;
+		default:
+			print_lval(file, lval);
+		}
+	}
+ end:
 }
 
 void compile_plus(FILE* file, LEnv* env, LVal* lval) {
@@ -141,7 +151,9 @@ void compile_def(FILE* file, LEnv* env, LVal* lval) {
   if (func_type->members_len) {
     fprintf(file, "%.*s ", func_type->members[i]->name.length, func_type->members[i]->name.chars);
     fprintf(file, "%.*s) {\n", args->car->symbol.length, args->car->symbol.chars);
-  }
+  } else {
+		fprintf(file, ") {\n");
+	}
 
   /* TODO: update env to include function local variables*/
 
