@@ -26,7 +26,6 @@ void print_lval(FILE* file, LVal* lval) {
   default:
     printf("tried to print lval of type ");
     print_ltype(lval);
-    printf("\n");
     break;
   }
 }

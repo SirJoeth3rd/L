@@ -176,6 +176,33 @@ void recur_print(LVal* lval) {
   }
 }
 
+#define PRINT_INDENT(depth) for (int i = 0; i < (depth); i++) { printf("  ");}
+
+void pprint(LVal* l, int d) {
+	switch (l->ltype) {
+	case LCons:
+		if (l->car->ltype == LCons) {
+			PRINT_INDENT(d);
+			printf("(\n");
+			pprint(l->car, d+1);
+			PRINT_INDENT(d);
+			printf(")\n");
+		} else {
+			pprint(l->car, d);
+		}
+		pprint(l->cdr, d);
+		break;
+	case LNil:
+		PRINT_INDENT(d);
+		printf("nil\n");
+		break;
+	default:
+		PRINT_INDENT(d);
+		print_lval(stdout, l);
+		printf("\n");
+	}
+}
+
 int Llist_length(LVal* list) {
   int len = 0;
   if (list->ltype != LCons) {
@@ -225,6 +252,10 @@ void handle_error(void *opaque, const char *msg)
 {
     fprintf(opaque, "%s\n", msg);
 }
+
+/* <x, <y, <z, nil>>> (x y z)*/
+/* <<x, <y, nil>>, <z <a, nil>>> (x y) (z a) */
+/* <<x, <y, nil>>, <z, nil>> ((x y) z)*/
 
 void pretty_print(LVal* val, int indent_level) {
   if (!val) {
@@ -300,7 +331,7 @@ int main(int argc, char** argv) {
   lcode_ptr = lcode;
   LVal* lexpr = parse(&tmp_arena, &lcode_ptr);
 
-	pretty_print(lexpr, 0);
+	pprint(lexpr, 0);
 	printf("\n");
 	recur_print(lexpr);
 	printf("\n");
@@ -318,40 +349,40 @@ int main(int argc, char** argv) {
 
 	char buffer[1000] = {0};
 	FILE* buffile = fmemopen(buffer, sizeof(buffer), "w");
-	compile(buffile, &env, lexpr);
-	fclose(buffile);
+	/* compile(buffile, &env, lexpr); */
+	/* fclose(buffile); */
 
-	printf("%s\n", buffer);
+	/* printf("%s\n", buffer); */
 
-	TCCState* tcc_state;
-	tcc_state = tcc_new();
-	if (!tcc_state) {
-		fprintf(stderr, "Could not create tcc state\n");
-		exit(1);
-	}
+	/* TCCState* tcc_state; */
+	/* tcc_state = tcc_new(); */
+	/* if (!tcc_state) { */
+	/* 	fprintf(stderr, "Could not create tcc state\n"); */
+	/* 	exit(1); */
+	/* } */
 
-	tcc_set_error_func(tcc_state, stderr, handle_error);
-	tcc_set_output_type(tcc_state, TCC_OUTPUT_MEMORY);
+	/* tcc_set_error_func(tcc_state, stderr, handle_error); */
+	/* tcc_set_output_type(tcc_state, TCC_OUTPUT_MEMORY); */
 
-	if (tcc_compile_string(tcc_state, buffer) == -1) {
-		exit(1);
-	}
+	/* if (tcc_compile_string(tcc_state, buffer) == -1) { */
+	/* 	exit(1); */
+	/* } */
 
-	if (tcc_relocate(tcc_state) < 0) {
-		exit(1);
-	}
+	/* if (tcc_relocate(tcc_state) < 0) { */
+	/* 	exit(1); */
+	/* } */
 
-	int (*main_func)(int);
-	main_func = tcc_get_symbol(tcc_state, "trippies");
-	if (!main_func) {
-		printf("Could not find symbol\n");
-		exit(2);
-	}
+	/* int (*main_func)(int); */
+	/* main_func = tcc_get_symbol(tcc_state, "trippies"); */
+	/* if (!main_func) { */
+	/* 	printf("Could not find symbol\n"); */
+	/* 	exit(2); */
+	/* } */
 
-	int result = main_func(3);
-	printf("result = %i\n", result);
+	/* int result = main_func(3); */
+	/* printf("result = %i\n", result); */
 
-	tcc_delete(tcc_state);
+	/* tcc_delete(tcc_state); */
 
   free(lcode);
   arena_free(&tmp_arena);
