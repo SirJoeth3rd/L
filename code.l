@@ -1,2 +1,4 @@
-(dec eg () int)
-(def eg () (return 8))
+(dec f () int)
+(def f ()
+	(let ((x int))
+		(return x)))

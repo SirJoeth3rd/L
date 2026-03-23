@@ -176,16 +176,14 @@ void recur_print(LVal* lval) {
   }
 }
 
-#define PRINT_INDENT(depth) for (int i = 0; i < (depth); i++) { printf("  ");}
-
 void pprint(LVal* l, int d) {
 	switch (l->ltype) {
 	case LCons:
 		if (l->car->ltype == LCons) {
-			PRINT_INDENT(d);
+			for (int i = 0; i < (d); i++) { printf("  ");} /* print indent */
 			printf("(\n");
 			pprint(l->car, d+1);
-			PRINT_INDENT(d);
+			for (int i = 0; i < (d); i++) { printf("  ");} /* print indent */
 			printf(")\n");
 		} else {
 			pprint(l->car, d);
@@ -193,11 +191,11 @@ void pprint(LVal* l, int d) {
 		pprint(l->cdr, d);
 		break;
 	case LNil:
-		PRINT_INDENT(d);
+		for (int i = 0; i < (d); i++) { printf("  ");} /* print indent */
 		printf("nil\n");
 		break;
 	default:
-		PRINT_INDENT(d);
+		for (int i = 0; i < (d); i++) { printf("  ");} /* print indent */
 		print_lval(stdout, l);
 		printf("\n");
 	}
@@ -253,74 +251,6 @@ void handle_error(void *opaque, const char *msg)
     fprintf(opaque, "%s\n", msg);
 }
 
-/* <x, <y, <z, nil>>> (x y z)*/
-/* <<x, <y, nil>>, <z <a, nil>>> (x y) (z a) */
-/* <<x, <y, nil>>, <z, nil>> ((x y) z)*/
-
-void pretty_print(LVal* val, int indent_level) {
-  if (!val) {
-    printf("null");
-    return;
-  }
-  
-  // Print indentation
-  for (int i = 0; i < indent_level; i++) {
-    printf("  ");
-  }
-  
-  switch (val->ltype) {
-	case LCons: {
-		LVal* current = val;
-      
-		if (current->cdr && current->cdr->ltype == LNil) {
-			// Single element list: (car)
-			printf("(");
-			pretty_print(current->car, 0);
-			printf(")");
-		} 
-		else if (current->cdr && current->cdr->ltype == LCons) {
-			// Proper list with multiple elements
-			printf("(\n");
-        
-			// Print each element
-			while (current && current->ltype == LCons) {
-				pretty_print(current->car, indent_level + 1);
-				printf("\n");
-				current = current->cdr;
-			}
-        
-			// Check if we ended properly (with nil)
-			if (current && current->ltype != LNil) {
-				// Dotted pair at the end
-				for (int i = 0; i < indent_level + 1; i++) {
-					printf("  ");
-				}
-				printf(". ");
-				pretty_print(current, indent_level + 1);
-				printf("\n");
-			}
-        
-			// Print closing parenthesis with proper indentation
-			for (int i = 0; i < indent_level; i++) {
-				printf("  ");
-			}
-			printf(")");
-		}
-		else {
-			// Dotted pair: (car . cdr)
-			printf("(");
-			pretty_print(val->car, 0);
-			printf(" . ");
-			pretty_print(val->cdr, 0);
-			printf(")");
-		}
-		break;
-	}
-	default:
-		print_lval(stdout, val);
-	}
-}
-
 int main(int argc, char** argv) {
   char *lcode_ptr, *lcode;
   LEnv env;
@@ -349,40 +279,40 @@ int main(int argc, char** argv) {
 
 	char buffer[1000] = {0};
 	FILE* buffile = fmemopen(buffer, sizeof(buffer), "w");
-	/* compile(buffile, &env, lexpr); */
-	/* fclose(buffile); */
+	compile(buffile, &env, lexpr);
+	fclose(buffile);
 
-	/* printf("%s\n", buffer); */
+	printf("%s\n", buffer);
 
-	/* TCCState* tcc_state; */
-	/* tcc_state = tcc_new(); */
-	/* if (!tcc_state) { */
-	/* 	fprintf(stderr, "Could not create tcc state\n"); */
-	/* 	exit(1); */
-	/* } */
+	TCCState* tcc_state;
+	tcc_state = tcc_new();
+	if (!tcc_state) {
+		fprintf(stderr, "Could not create tcc state\n");
+		exit(1);
+	}
 
-	/* tcc_set_error_func(tcc_state, stderr, handle_error); */
-	/* tcc_set_output_type(tcc_state, TCC_OUTPUT_MEMORY); */
+	tcc_set_error_func(tcc_state, stderr, handle_error);
+	tcc_set_output_type(tcc_state, TCC_OUTPUT_MEMORY);
 
-	/* if (tcc_compile_string(tcc_state, buffer) == -1) { */
-	/* 	exit(1); */
-	/* } */
+	if (tcc_compile_string(tcc_state, buffer) == -1) {
+		exit(1);
+	}
 
-	/* if (tcc_relocate(tcc_state) < 0) { */
-	/* 	exit(1); */
-	/* } */
+	if (tcc_relocate(tcc_state) < 0) {
+		exit(1);
+	}
 
-	/* int (*main_func)(int); */
-	/* main_func = tcc_get_symbol(tcc_state, "trippies"); */
-	/* if (!main_func) { */
-	/* 	printf("Could not find symbol\n"); */
-	/* 	exit(2); */
-	/* } */
+	int (*main_func)(int);
+	main_func = tcc_get_symbol(tcc_state, "f");
+	if (!main_func) {
+		printf("Could not find symbol\n");
+		exit(2);
+	}
 
-	/* int result = main_func(3); */
-	/* printf("result = %i\n", result); */
+	int result = main_func(3);
+	printf("result = %i\n", result);
 
-	/* tcc_delete(tcc_state); */
+	tcc_delete(tcc_state);
 
   free(lcode);
   arena_free(&tmp_arena);

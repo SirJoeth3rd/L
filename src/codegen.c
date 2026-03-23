@@ -30,104 +30,103 @@ void print_lval(FILE* file, LVal* lval) {
   }
 }
 
-void print_comma_seperated_list(FILE* file, LVal* list) {
-  int i, length;
-  length = Llist_length(list);
-  for (i = 0; i < length - 1; i++) {
-    print_lval(file, list->car);
-    list = list->cdr;
-  }
-  if (length > 0) {
-    print_lval(file, list->car);
-  }
+void compile_binary_operator(FILE* file, LEnv* env, LVal* lval, LString operator_symbol) {
+	/* (+ x y z) */
+	fprintf(file, "(");
+	while (lval->cdr->ltype == LCons) {
+		compile(file, env, lval->car);
+		fprintf(file, "%.*s", operator_symbol.length, operator_symbol.chars);
+		lval = lval->cdr;
+	}
+	// TODO: what if final lval isn't LNil?
+	compile(file, env, lval->car);
+	fprintf(file,")");
+}
+
+bool is_binary_operator(LString symbol) {
+	return
+		LString_cmp(symbol, "+")
+		|| LString_cmp(symbol, "-")
+		|| LString_cmp(symbol, "*")
+		|| LString_cmp(symbol, "/")
+		|| LString_cmp(symbol, "&&")
+		|| LString_cmp(symbol, "||");
+}
+
+bool compile_builtin(FILE* file, LEnv* env, LString symbol, LVal* lval) {
+	if (is_binary_operator(symbol)) {
+		compile_binary_operator(file, env, lval, symbol);
+		return true;
+	} else if (LString_cmp(symbol, "def")) { /* check keywords */
+		compile_def(file, env, lval);
+		return true;
+	} else if (LString_cmp(symbol, "let")){
+		compile_let(file, env, lval);
+		return true;
+	} else if (LString_cmp(symbol, "dec")){
+		return true; /* just ignore dec */
+	} else if (LString_cmp(symbol, "return")){
+		/* TODO: L code should not have to specify return. */
+		fprintf(file, "return ");
+		compile(file, env, lval);
+		fprintf(file, ";\n");
+		return true;
+	}
+
+	return false;
+}
+
+void compile_funcall(FILE* file, LEnv* env, LString symbol, LVal* lval) {
+	LType* func_type = env_lookup(env, symbol);
+	if (!func_type) {
+		printf("unrecgonized symbol -> %.*s", symbol.length, lval->car->symbol.chars);
+		exit(1);
+	} 
+	fprintf(file, "%.*s(", symbol.length, symbol.chars);
+	/* comma seperated list */
+	if (lval->ltype != LCons) {
+		compile(file, env, lval);
+	} else {
+		while (lval->cdr->ltype == LCons) {
+			compile(file, env, lval->car);
+			fprintf(file, ",");
+			lval = lval->cdr;
+		}
+		// TODO: what if final lval isn't LNil?
+		compile(file, env, lval->car);
+	}
+	fprintf(file, ")");
 }
 
 void compile(FILE* file, LEnv* env, LVal* lval) {
-  /*(+ 1 2 3) -> <+, <1, <2, <3, nil>>>>*/
-  LType* func_type;
-
-	while (lval) {
-		switch (lval->ltype) {
-		case LCons:
-			if (lval->car->ltype == LSymbol) {
-				if (LString_cmp(lval->car->symbol, "+")) {
-					compile_plus(file, env, lval->cdr);
-				} else if (LString_cmp(lval->car->symbol, "-")) {
-					compile_minus(file, env, lval->cdr);
-				} else if (LString_cmp(lval->car->symbol, "def")) {
-					compile_def(file, env, lval->cdr);
-				} else if (LString_cmp(lval->car->symbol, "let")){
-					compile_let(file, env, lval->cdr);
-				} else if (LString_cmp(lval->car->symbol, "*")){
-					compile_mul(file, env, lval->cdr);
-				} else if (LString_cmp(lval->car->symbol, "dec")){
-					return;
-				} else if (LString_cmp(lval->car->symbol, "return")){
-					/*TODO: L code should not have to specify return.*/
-					fprintf(file, "return ");
-					compile(file, env, lval->cdr);
-					fprintf(file, ";\n");
-				} else {
-					func_type = env_lookup(env, lval->car->symbol);
-					if (!func_type) {
-						printf("unrecgonized symbol -> %.*s", lval->car->symbol.length, lval->car->symbol.chars);
-						exit(1);
-					} else {
-						fprintf(file, "%.*s(", lval->car->symbol.length, lval->car->symbol.chars);
-						print_comma_seperated_list(file, lval->cdr);
-						fprintf(file, ")");
-					}
-				}
-				/* compile_... will consume the entire list ie we can exit out of compile*/
-				compile(file, env, lval->car);
-				return;
-      } else if (lval->car->ltype == LCons) {
-				compile(file, env, lval->car);
-      }
-      lval = lval->cdr;
+	switch (lval->ltype) {
+	case LCons:
+		switch (lval->car->ltype) {
+		case LCons: /* (+ 8 8) (* 7 7) */
+			compile(file, env, lval->car);
+			compile(file, env, lval->cdr);
 			break;
+		case LSymbol:
+			if (compile_builtin(file, env, lval->car->symbol, lval->cdr)) return;
+			else compile_funcall(file, env, lval->car->symbol, lval->cdr);
+			return;
 		case LNil:
-			goto end;
+			fprintf(file,"()");
+			break;
 		default:
-			print_lval(file, lval);
+			print_lval(file, lval->car);
 		}
+		break; /* I don't really understand but apparently I can just ignore lval->cdr in this case. */
+	case LNil:
+		break;
+	default:
+		print_lval(file, lval);
 	}
- end:
-}
-
-void compile_plus(FILE* file, LEnv* env, LVal* lval) {
-  /*(+ x y z)*/
-  while (lval->cdr->ltype == LCons) {
-    /* TODO: assuming here that the type is symbol*/
-    fprintf(file, "%.*s + ", lval->car->symbol.length, lval->car->symbol.chars);
-    lval = lval->cdr;
-  }
-  fprintf(file, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
-}
-
-void compile_minus(FILE* file, LEnv* env, LVal* lval) {
-  /*(+ x y z)*/
-  while (lval->cdr->ltype == LCons) {
-    /* TODO: assuming here that the type is symbol*/
-    fprintf(file, "%.*s - ", lval->car->symbol.length, lval->car->symbol.chars);
-    lval = lval->cdr;
-  }
-  fprintf(file, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
-}
-
-void compile_mul(FILE* file, LEnv* env, LVal* lval) {
-  /*(+ x y z)*/
-  while (lval->cdr->ltype == LCons) {
-    /* TODO: assuming here that the type is symbol*/
-    fprintf(file, "%.*s * ", lval->car->symbol.length, lval->car->symbol.chars);
-    lval = lval->cdr;
-  }
-  fprintf(file, "%.*s", lval->car->symbol.length, lval->car->symbol.chars);
 }
 
 void compile_def(FILE* file, LEnv* env, LVal* lval) {
   /*<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>*/
-  /*TODO: Type Checking Here? Or earlier in analysis.*/
+  /* TODO: Type Checking Here? Or earlier in analysis. */
   LVal* func_name, *args, *body;
   LType* func_type;
   int i;

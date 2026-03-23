@@ -23,6 +23,12 @@ struct LType {
   LType** members;
 };
 
+/*
+	I'm not exactly concerned about the performance charecteristics
+	of the precompilation lvals etc. The purpose of these are just
+	to compile the real deal. 
+ */
+
 struct LVal {
   enum {
     LSymbol,
@@ -40,6 +46,7 @@ struct LVal {
     LString string;
     long long int number;  
   };
+	uint64_t uid;
 };
 
 typedef struct {
@@ -68,17 +75,16 @@ void env_resize(LEnv*);
 void print_ltype(LVal*);
 LVal cons(LVal*, LVal*);
 void recur_print(LVal*);
+void pprint(LVal*, int);
 int Llist_length(LVal*);
 
 /* Parser */
 LVal* parse(Arena*, char**); /* parse to lval*/
 
 /* Analysis */
-LErr analyse_dec(Arena*, LEnv*, LVal*); 
 LErr analyse(Arena*, LEnv*, LVal*); /* add type info*/
 
 /* Code Gen */
-
 void compile(FILE*, LEnv*, LVal*);
 
 #endif /* L_H */

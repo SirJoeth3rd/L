@@ -2,20 +2,40 @@
 #include "string.h"
 #include <stdio.h>
 
-LErr analyse(Arena* arena, LEnv* env, LVal* lval) { /* (dec f (int int) int))*/
-  while (lval && lval->ltype != LNil) {
-    if (lval->ltype == LCons) {
-      if (lval->car->ltype == LCons) {
-				if (lval->car->car->ltype == LSymbol) {
-					if (LString_cmp(lval->car->car->symbol, "dec")) {
-						analyse_dec(arena, env, lval->car->cdr);
-					}
-				}
-      }
-      lval = lval->cdr;
-    }
-  }
-  return (LErr){0};
+/*
+	To keep it simple for now we will only allow explicit type casting like in Go. 
+ */
+
+LErr analyse_let(Arena*, LEnv*, LVal*);
+LErr analyse_dec(Arena*, LEnv*, LVal*);
+
+LErr analyse(Arena* arena, LEnv* env, LVal* lval) {
+	switch (lval->ltype) {
+	case LCons:
+		if (lval->car->ltype == LSymbol) {
+			if (LString_cmp(lval->car->symbol, "dec")) {
+				analyse_dec(arena, env, lval->cdr);
+			} else if (LString_cmp(lval->car->symbol, "let")) {
+				analyse_let(arena, env, lval->cdr);
+			}			
+		} else {
+			analyse(arena, env, lval->car);
+		}
+		analyse(arena, env, lval->cdr);
+		break;
+		default:
+			break;
+	}
+	return (LErr){0};
+}
+
+LErr analyse_let(Arena* arena, LEnv* env, LVal* lval) {
+	/* (let ((x int 0) (y int 0)) lval starts at ((x
+		   (+ x y))*/
+	printf("===ANALYSE LET===\n");
+	pprint(lval, 0);
+	printf("===/ANALYSE LET/===\n");
+	return (LErr){0};
 }
 
 LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
@@ -70,3 +90,5 @@ LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
 	env_put(env, function_type.name, function_type);
   return (LErr){0};
 }
+
+
