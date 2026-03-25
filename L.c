@@ -68,8 +68,7 @@
    (defmacro for (init cond end-stmnt body)
      init
      (while cond
-       (do body end-stmnt))
-   )
+       (do body end-stmnt)))
 
    (decdef length (string char*) int
     (let ((total int 0) (chr char)) --> let makes a new scope
@@ -180,10 +179,10 @@ void pprint(LVal* l, int d) {
 	switch (l->ltype) {
 	case LCons:
 		if (l->car->ltype == LCons) {
-			for (int i = 0; i < (d); i++) { printf("  ");} /* print indent */
+			for (int i = 0; i < (d); i++) {printf("  ");} /* print indent */
 			printf("(\n");
 			pprint(l->car, d+1);
-			for (int i = 0; i < (d); i++) { printf("  ");} /* print indent */
+			for (int i = 0; i < (d); i++) {printf("  ");} /* print indent */
 			printf(")\n");
 		} else {
 			pprint(l->car, d);
@@ -246,8 +245,7 @@ char* read_file(const char* filename) {
   return bstart;
 }
 
-void handle_error(void *opaque, const char *msg)
-{
+void handle_error(void *opaque, const char *msg) {
     fprintf(opaque, "%s\n", msg);
 }
 
