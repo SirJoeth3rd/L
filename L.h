@@ -15,12 +15,20 @@ typedef struct {
 
 typedef struct LVal LVal;
 typedef struct LType LType;
+typedef struct LEnv LEnv;
+typedef struct LEnvStack LEnvStack;
 
 struct LType {
   LString name;
   LType* parent;
   uint16_t members_len;
   LType** members;
+	enum {
+		LBase, /* base type like int */
+		LPlex, /* a product type */
+		LEnum, /* a sum type */
+		LFunc  /* a function type */
+	} type_kind;
 };
 
 /*
@@ -44,9 +52,10 @@ struct LVal {
     };
     LString symbol;
     LString string;
-    long long int number;  
+    long long int number;
   };
-	uint64_t uid;
+	LType* type;
+	LVal* parent;
 };
 
 typedef struct {
@@ -57,21 +66,29 @@ typedef struct {
 
 /* LEnv is fundamentally just a hashmap that keeps track of all symbols types. */
 
-typedef struct LEnv {
+struct LEnv {
+	/* stack values used to keep track of scoped variables */
+	uint64_t stack[2048];
+	unsigned int stack_index;
+
+	/* the core hashmap */
 	LEnvKey* keys;
 	unsigned int prime_index;
 	unsigned int capacity;
 	unsigned int balance;
-} LEnv;
+};
 
-
+/* Environment */
 LEnv env_init(Arena*);
 LType* env_lookup(LEnv*, LString);
-LType* env_put(LEnv*, LString, LType);
 void env_delete(LEnv*, LString);
 void env_resize(LEnv*);
+void env_push_scope(LEnv*);
+void env_pop_scope(LEnv*);
+LType* env_put_global(LEnv*, LString, LType);
+LType* env_put_local(LEnv*, LString, LType);
 
-/* Helpers*/
+/* Helpers */
 void print_ltype(LVal*);
 LVal cons(LVal*, LVal*);
 void recur_print(LVal*);

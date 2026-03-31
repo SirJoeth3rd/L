@@ -17,16 +17,27 @@ LErr analyse(Arena* arena, LEnv* env, LVal* lval) {
 				analyse_dec(arena, env, lval->cdr);
 			} else if (LString_cmp(lval->car->symbol, "let")) {
 				analyse_let(arena, env, lval->cdr);
-			}			
+			}	else {
+				/* TODO: analyse function call */
+			}
 		} else {
 			analyse(arena, env, lval->car);
+			analyse(arena, env, lval->cdr);
 		}
-		analyse(arena, env, lval->cdr);
 		break;
-		default:
+	case LSymbol:
+		break;
+		default:	
 			break;
 	}
 	return (LErr){0};
+}
+
+LErr assign_type(LEnv* env, LVal* lval) {
+	// run up the tree
+
+	
+	
 }
 
 LErr analyse_let(Arena* arena, LEnv* env, LVal* lval) {
