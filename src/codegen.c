@@ -76,12 +76,8 @@ bool compile_builtin(FILE* file, LEnv* env, LString symbol, LVal* lval) {
 	return false;
 }
 
-void compile_funcall(FILE* file, LEnv* env, LString symbol, LVal* lval) {
-	LType* func_type = env_lookup(env, symbol);
-	if (!func_type) {
-		printf("unrecgonized symbol -> %.*s", symbol.length, symbol.chars);
-		exit(1);
-	} 
+void compile_funcall(FILE* file, LEnv* env, LString symbol, LType* ftype, LVal* lval) {
+	fprintf(file, "%.*s", ftype->name.length, ftype->name.chars);
 	fprintf(file, "%.*s(", symbol.length, symbol.chars);
 	/* comma seperated list */
 	if (lval->ltype != LCons) {
@@ -108,15 +104,15 @@ void compile(FILE* file, LEnv* env, LVal* lval) {
 			compile(file, env, lval->cdr);
 			break;
 		case LSymbol:
-			if (compile_builtin(file, env, lval->car->symbol, lval->cdr)) return;
+			if (compile_builtin(file, env, lval->car->symbol, lval->cdr))
+				return;
 			ltype = env_lookup(env, lval->car->symbol);
-			if (!ltype) {
-				print_lval(file, lval->car);
-				//TODO check if this is valid.
+			if (ltype) {
+				compile_funcall(file, env, lval->car->symbol, ltype, lval->cdr);
 			} else {
-				compile_funcall(file, env, lval->car->symbol, lval->cdr);
+				print_lval(file, lval->car);
 			}
-			return;
+			break;
 		case LNil:
 			fprintf(file,"()");
 			break;

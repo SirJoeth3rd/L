@@ -19,13 +19,10 @@ LVal* parse_number(Arena* arena, char** chr);
 LVal* parse_string(Arena* arena, char** chr);
 LVal* parse_symbol(Arena* arena, char** chr);
 
-static uint64_t uid = 0;
-
 LVal* parse(Arena* arena, char** chr) {
   LVal *lval, *root;
 
   lval = (LVal*)arena_alloc(arena, sizeof(*lval));
-	lval->uid = uid; uid++;
   
   root = lval;
   root->ltype = LCons;
@@ -62,8 +59,8 @@ LVal* parse(Arena* arena, char** chr) {
     
     /* append the new <value_here, next cons>*/
   post_symbol:
+		lval->car->parent = lval;
     lval->cdr = (LVal*)arena_alloc(arena, sizeof(*lval));
-		lval->uid = uid; uid++;
     lval = lval->cdr;
     lval->ltype = LCons;
   }
@@ -89,7 +86,6 @@ LVal* parse_number(Arena* arena, char** chr) {
 
   buffer[i] = 0;
   lval = arena_alloc(arena, sizeof(*lval));
-	lval->uid = uid; uid++;
   lval->ltype = LNumber;
   lval->number = atoi(buffer);
   return lval;
@@ -115,7 +111,6 @@ LVal* parse_string(Arena* arena, char** chr) {
   }
 
   lval = arena_alloc(arena, sizeof(*lval));
-	lval->uid = uid; uid++;
   lval->ltype = LLString;
   lval->string = (LString) {
     .chars = starting_position,
@@ -138,7 +133,6 @@ LVal* parse_symbol(Arena* arena, char** chr) {
   }
 
   lval = (LVal*)arena_alloc(arena, sizeof(*lval));
-	lval->uid = uid; uid++;
   lval->ltype = LSymbol;
   lval->symbol = (LString) {
     .chars = start_position,

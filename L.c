@@ -314,5 +314,7 @@ int main(int argc, char** argv) {
 
   free(lcode);
   arena_free(&tmp_arena);
-  return 0;
+
+
+	/* TESTING a theory */	
 }

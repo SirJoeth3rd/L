@@ -38,7 +38,6 @@ static const unsigned int PRIMES[MAX_PRIME_INDEX + 1] = {
   1610612741
 };
 
-
 /* ai function here */
 static uint64_t string_hash(const char* string, size_t length, uint64_t seed) {
     uint64_t h1, h2;
@@ -111,13 +110,39 @@ static uint64_t string_hash(const char* string, size_t length, uint64_t seed) {
     return h1;
 }
 
-uint64_t LString_hash(LString str) {
-	return string_hash(str.chars, str.length, 0);
+uint64_t LString_hash(LString str,  int seed) {
+	return string_hash(str.chars, str.length, seed);
+}
+
+void env_push_scope(LEnv* env) {
+	env->stack[env->stack_index] = 0;
+	env->stack_index++;
+	env->scope_count++;
+}
+
+void env_pop_scope(LEnv* env) {
+	env->stack_index = env->stack_index == 0 ? env->stack_index - 1 : 0;
+	while (env->stack[env->stack_index] != 0) {
+		env_delete_key(env, env->stack[env->stack_index]);
+		env->stack[env->stack_index] = 0;
+		env->stack_index = env->stack_index == 0 ? env->stack_index - 1 : 0;
+	}
+	env->scope_count = env->scope_count ? env->scope_count - 1 : 0;
 }
 
 LType* env_lookup(LEnv* env, LString name) {
+	LType* type = 0;
+
+	for (unsigned int scope_count = 0; scope_count < env->scope_count; scope_count++) {
+		type = env_lookup_key(env, LString_hash(name, scope_count));
+		if (type) break;
+	}
+
+	return type;
+}
+
+LType* env_lookup_key(LEnv* env, uint64_t key) {
 	int distance = 0;
-	uint64_t key = LString_hash(name);
   int index = key % env->capacity;
 
   while (env->keys[index].distance) {
@@ -128,7 +153,7 @@ LType* env_lookup(LEnv* env, LString name) {
       return NULL;
     }
     distance++;
-    index = (index + 1) % env->capacity; /* rap around*/
+    index = (index + 1) % env->capacity; /* rap around */
   }
   return NULL;
 }
@@ -161,8 +186,19 @@ LType* env_put_key(LEnv *env, uint64_t key, LType val) {
 	return &env->keys[index].data;
 }
 
-LType* env_put(LEnv* env, LString name, LType val) {
-	return env_put_key(env, LString_hash(name), val);
+LType* env_put_global(LEnv* env, LString name, LType val) {
+	return env_put_key(env, LString_hash(name, 0), val);
+}
+
+LType* env_put_local(LEnv* env, LString name, LType val) {
+	LType* type;
+	uint64_t new_key = LString_hash(name, env->scope_count);
+	type = env_put_key(env, new_key, val);
+	if (type) {
+		env->stack[env->stack_index] = new_key;
+		env->stack_index++;
+	}
+	return type;
 }
 
 void env_resize(LEnv* env) {
@@ -185,9 +221,8 @@ void env_resize(LEnv* env) {
   free(oldkeys);
 }
 
-void env_delete(LEnv* env, LString name) {
+void env_delete_key(LEnv* env, uint64_t key) {
   int distance = 0;
-	uint64_t key = LString_hash(name);
   int index = key % env->capacity;
 
   while (env->keys[index].distance) {
@@ -210,8 +245,18 @@ void env_delete(LEnv* env, LString name) {
     
     distance++;
     index = (index + 1) % env->capacity;
-  }
+  }	
 }
+
+void env_delete(LEnv* env, LString name) {
+	env_delete_key(env, LString_hash(name, 0));
+}
+
+// nil <- int <- function <-
+// clearly this isn't going to work
+
+// int -> (int -> a) -> a
+// a -> maybe a
 
 #define INT "int"
 #define CHAR "char"
@@ -231,40 +276,46 @@ LEnv env_init(Arena* arena) {
 
   new_type.name = (LString){.chars = NIL, .length=sizeof(NIL)-1};
   new_type.members_len = 0;
-  nil_ptr = (LType*)env_put(&env, new_type.name, new_type);
+	new_type.type_kind = LBase;
+  nil_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
   nil_ptr->parent = nil_ptr;
 
   new_type.name = (LString){.chars = INT, .length=sizeof(INT)-1};
+	new_type.type_kind = LBase;
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  int_type = (LType*)env_put(&env, new_type.name, new_type);
+  int_type = (LType*)env_put_global(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = CHAR, .length=sizeof(CHAR)-1};
+	new_type.type_kind = LBase;
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  char_type = (LType*)env_put(&env, new_type.name, new_type);
+  char_type = (LType*)env_put_global(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = BOOL, .length=sizeof(BOOL)-1};
+	new_type.type_kind = LBase;
   new_type.members_len = 0;
   new_type.parent = nil_ptr;
-  env_put(&env, new_type.name, new_type);
+  env_put_global(&env, new_type.name, new_type);
 
   /* technically we can have char*********; so this should actually be generalized and the*/
   /* types for pointers should only be added during the analysis phase. (except maybe the first pointer type)*/
 
   new_type.name = (LString){.chars = "char*", .length=(sizeof("char*")-1)};
+	new_type.type_kind = LBase;
   new_type.parent = char_type;
   new_type.members_len = 1;
   new_type.members = arena_alloc(arena, sizeof(LType*));
   *new_type.members = int_type;
-  char_ptr_type = (LType*)env_put(&env, new_type.name, new_type);
+  char_ptr_type = (LType*)env_put_global(&env, new_type.name, new_type);
 
   new_type.name = (LString){.chars = "char**", .length=(sizeof("char**")-1)};
+	new_type.type_kind = LBase;
   new_type.parent = char_ptr_type;
   new_type.members_len = 1;
   new_type.members = arena_alloc(arena, sizeof(LType*));
   *new_type.members = int_type;
-  env_put(&env, new_type.name, new_type);
+  env_put_global(&env, new_type.name, new_type);
 
   /* XXX: other base types*/
 
