@@ -10,6 +10,8 @@ void compile_minus(FILE*, LEnv*, LVal*);
 void compile_mul(FILE*, LEnv*, LVal*);
 void compile_def(FILE*, LEnv*, LVal*);
 void compile_let(FILE*, LEnv*, LVal*);
+void compile_plex(FILE*, LEnv*, LVal*);
+void compile_variant(FILE*, LEnv*, LVal*);
 void compile(FILE*, LEnv*, LVal*);
 
 void print_lval(FILE* file, LVal* lval) {
@@ -63,6 +65,12 @@ bool compile_builtin(FILE* file, LEnv* env, LString symbol, LVal* lval) {
 	} else if (LString_cmp(symbol, "let")){
 		compile_let(file, env, lval);
 		return true;
+	} else if (LString_cmp(symbol, "plex")){
+		compile_plex(file, env, lval);
+		return true;
+	} else if (LString_cmp(symbol, "variant")){
+		compile_variant(file, env, lval);
+		return true;
 	} else if (LString_cmp(symbol, "dec")){
 		return true; /* just ignore dec */
 	} else if (LString_cmp(symbol, "return")){
@@ -74,6 +82,104 @@ bool compile_builtin(FILE* file, LEnv* env, LString symbol, LVal* lval) {
 	}
 
 	return false;
+}
+
+void compile_plex_fields(FILE* file, LEnv* env, LVal* lval) {
+	assert(lval->ltype == LCons && "syntax error plex fields");
+	fprintf(file, "{\n");
+	while(lval->ltype != LNil && lval->car->ltype != LNil) {
+		if (LString_cmp(lval->car->car->symbol, "variant")) {
+			compile_variant(file, env, lval->car->cdr);
+		} else {
+			fprintf(
+							file,
+							"%.*s %.*s;\n",
+							lval->car->car->symbol.length,
+							lval->car->car->symbol.chars,
+							lval->car->cdr->car->symbol.length,
+							lval->car->cdr->car->symbol.chars
+							);
+		}
+		lval = lval->cdr;
+	}
+	fprintf(file, "}\n");
+}
+
+void compile_plex(FILE* file, LEnv* env, LVal* lval) {
+	assert(lval->ltype == LCons && "plex syntax error");
+
+	if (lval->car->ltype == LSymbol) {
+		// typedef
+		fprintf(
+						file,
+						"typedef struct %.*s ",
+						lval->car->symbol.length,
+						lval->car->symbol.chars
+						);
+		compile_plex_fields(file, env, lval->cdr);
+	} else {
+		// anonymous struct
+		fprintf(
+						file,
+						"struct "
+						);
+		compile_plex_fields(file, env, lval->car);
+	}
+}
+
+void compile_variant_fields(FILE* file, LEnv* env, LVal* lval) {
+	LVal* fields = lval;
+	fprintf(file, "{\nenum {\n");
+	while (fields->car->ltype == LCons) {
+		fprintf(
+						file,
+						"%.*s\n",
+						fields->car->car->symbol.length,
+						fields->car->car->symbol.chars
+						);
+		if (fields->cdr->car->ltype != LNil) {
+			fprintf(file, ",");
+		}
+		fields = fields->cdr;
+	}
+	fprintf(file, "};\n");
+
+	fields = lval;
+	fprintf(file, "union {\n");
+	while (fields->car->ltype == LCons) {
+		fprintf(
+						file,
+						"%.*s %.*s;\n",
+						fields->car->car->symbol.length,
+						fields->car->car->symbol.chars,
+						lval->car->cdr->car->symbol.length,
+						lval->car->cdr->car->symbol.chars
+						);
+		fields = fields->cdr;
+	}
+	fprintf(file, "};\n}");
+}
+
+void compile_variant(FILE* file, LEnv* env, LVal* lval) {
+	assert(lval->ltype == LCons && "plex syntax error");
+
+	if (lval->car->ltype == LSymbol) {
+		// typedef
+		fprintf(
+						file,
+						"typedef struct %.*s",
+						lval->car->symbol.length,
+						lval->car->symbol.chars
+						);
+		compile_variant_fields(file, env, lval);
+	} else {
+		// anonymous declaration
+		fprintf(
+						file,
+						"struct "
+						);
+		compile_variant_fields(file, env, lval->car);
+	}
 }
 
 void compile_funcall(FILE* file, LEnv* env, LString symbol, LType* ftype, LVal* lval) {
