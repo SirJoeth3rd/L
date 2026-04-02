@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 void print_lval(FILE*, LVal*);
 void print_comma_seperated_list(FILE*, LVal*);
@@ -112,50 +113,18 @@ void compile_plex(FILE* file, LEnv* env, LVal* lval) {
 	if (lval->car->ltype == LSymbol) {
 		// typedef
 		fprintf(file,
-						"typedef struct %.*s {",
+						"struct %.*s {\n",
 						lval->car->symbol.length,
 						lval->car->symbol.chars);
 		compile_plex_fields(file, env, lval->cdr);
-		fprintf(file,
-						"} %.*s;\n",
-						lval->car->symbol.length,
-						lval->car->symbol.chars);
+		fprintf(file, "};\n");
 	} else {
 		// anonymous struct
-		fprintf(file,"struct {");
+		fprintf(file,"struct {\n");
 		compile_plex_fields(file, env, lval->car);
-		fprintf(file, "};\n");
+		fprintf(file, "}");
 	}
 }
-
-/*
-(plex LVal
-			(variant
-			 (LSymbol LString)
-			 (LLString LString)
-			 (LNumber int64_t)
-			 (LCons (plex ((LVal* car) (LVal* cdr))))
-			 (LNil))
-			(LType* type)
-			(LVal* parent))
-
-typedef struct lv {
-  enum {
-    LSym,
-    LCon,
-    LNi,
-  } variant;
-  union {
-    LString LSym;
-    struct {
-		  LVal* car;
-		  LVal* cdr;
-		} LCon;
-  };
-	LType* type;
-	LVal* parent;
-} lv;
-*/
 
 //# compile variant
 void compile_variant_fields(FILE* file, LEnv* env, LVal* lval) {
@@ -178,19 +147,26 @@ void compile_variant_fields(FILE* file, LEnv* env, LVal* lval) {
 	fields = lval;
 	fprintf(file, "union {\n");
 	while (fields->ltype == LCons && fields->car->ltype == LCons) {
-		if (LString_cmp(fields->car->cdr->car->symbol, "plex")) {
-			compile_plex_fields(file, env, fields->car->cdr->cdr);
+		if (fields->car->cdr->car->ltype == LCons && LString_cmp(fields->car->cdr->car->car->symbol, "plex")) {
+			compile_plex(file, env, fields->car->cdr->car->cdr);
+		} else if (fields->car->cdr->cdr->ltype == LNil) {
+			fields = fields->cdr;
+			continue;
 		} else {
 			fprintf(
 							file,
-							"%.*s %.*s;\n",
-							fields->car->car->symbol.length,
-							fields->car->car->symbol.chars,
-							lval->car->cdr->car->symbol.length,
-							lval->car->cdr->car->symbol.chars
+							"%.*s ",
+							fields->car->cdr->car->symbol.length,
+							fields->car->cdr->car->symbol.chars
 							);
-			fields = fields->cdr;
 		}
+		fprintf(
+						file,
+						"%.*s;\n",
+						fields->car->car->symbol.length,
+						fields->car->car->symbol.chars
+						);
+		fields = fields->cdr;
 	}
 	fprintf(file, "};\n");
 }

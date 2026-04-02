@@ -264,14 +264,15 @@ int main(int argc, char** argv) {
 	recur_print(lexpr);
 	printf("\n");
 
-  env = env_init(&tmp_arena);
-  analyse(&tmp_arena, &env, lexpr);
-
   FILE* file = fopen("compiled.c", "w+");
   if (file == NULL) {
     perror("Error opening file\n");
     return EXIT_FAILURE;
   }
+
+  env = env_init(&tmp_arena);
+  analyse_print(file, &env, lexpr);
+	
   compile(file,&env,lexpr);
 	fclose(file);
 

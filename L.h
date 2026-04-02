@@ -67,6 +67,8 @@ typedef struct {
 /* LEnv is fundamentally just a hashmap that keeps track of all symbols types. */
 
 struct LEnv {
+	Arena* arena;
+	
 	/* stack values used to keep track of scoped variables */
 	uint64_t stack[2048];
 	unsigned int stack_index;
@@ -100,10 +102,13 @@ void pprint(LVal*, int);
 int Llist_length(LVal*);
 
 /* Parser */
-LVal* parse(Arena*, char**); /* parse to lval*/
+LVal* parse(Arena*, char**);
 
-/* Analysis */
-LErr analyse(Arena*, LEnv*, LVal*); /* add type info*/
+/* Analysis
+	 Add type information into LEnv.
+	 Also generate header like struct declarations and function declarations.
+ */
+LErr analyse_print(FILE*, LEnv*, LVal*);
 
 /* Code Gen */
 void compile(FILE*, LEnv*, LVal*);

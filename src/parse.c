@@ -139,5 +139,10 @@ LVal* parse_symbol(Arena* arena, char** chr) {
     .length = length
   };
 
+	if (LString_cmp(lval->symbol, "nil")) {
+		lval->ltype = LNil;
+		lval->symbol = (LString){0};
+	}
+
   return lval;
 }

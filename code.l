@@ -17,3 +17,5 @@
 			 (LNil nil))
 			(LType* type)
 			(LVal* parent))
+
+(dec f (int int) int)

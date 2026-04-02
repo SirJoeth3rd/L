@@ -209,7 +209,7 @@ void env_resize(LEnv* env) {
   
   env->prime_index = env->prime_index + 1;
   env->capacity = PRIMES[env->prime_index];
-  env->keys = calloc(env->capacity, sizeof(LEnvKey));
+  env->keys = arena_alloc(env->arena, env->capacity*sizeof(LEnvKey));
 
 	unsigned int i;
   for (i = 0; i < oldlength; i++) {
@@ -262,14 +262,16 @@ void env_delete(LEnv* env, LString name) {
 #define CHAR "char"
 #define BOOL "bool"
 #define NIL "nil"
-#define STRUCT "struct"
+#define PLEX "plex"
 #define VARIANT "variant"
 
 LEnv env_init(Arena* arena) {
   LEnv env;
   LType *nil_ptr;
   LType new_type;
-  LType *char_type, *char_ptr_type, *int_type, *struct_ptr, *variant_ptr;
+  LType *char_type, *char_ptr_type, *int_type, *plex_ptr, *variant_ptr;
+
+	env.arena = arena;
 
 	env.prime_index = 0;
   env.capacity = PRIMES[env.prime_index];
@@ -282,11 +284,11 @@ LEnv env_init(Arena* arena) {
   nil_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
   nil_ptr->parent = nil_ptr;
 
-	new_type.name = (LString){.chars = STRUCT, .length=sizeof(STRUCT)-1};
+	new_type.name = (LString){.chars = PLEX, .length=sizeof(PLEX)-1};
 	new_type.members_len = 0;
 	new_type.type_kind = LPlex;
-	struct_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
-	struct_ptr->parent = nil_ptr;
+	plex_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
+	plex_ptr->parent = nil_ptr;
 
 	new_type.name = (LString){.chars = VARIANT, .length=sizeof(VARIANT)-1};
 	new_type.members_len = 0;
@@ -319,7 +321,7 @@ LEnv env_init(Arena* arena) {
 	new_type.type_kind = LBase;
   new_type.parent = char_type;
   new_type.members_len = 1;
-  new_type.members = arena_alloc(arena, sizeof(LType*));
+  new_type.members = arena_alloc(env.arena, sizeof(LType*));
   *new_type.members = int_type;
   char_ptr_type = (LType*)env_put_global(&env, new_type.name, new_type);
 
@@ -327,7 +329,7 @@ LEnv env_init(Arena* arena) {
 	new_type.type_kind = LBase;
   new_type.parent = char_ptr_type;
   new_type.members_len = 1;
-  new_type.members = arena_alloc(arena, sizeof(LType*));
+  new_type.members = arena_alloc(env.arena, sizeof(LType*));
   *new_type.members = int_type;
   env_put_global(&env, new_type.name, new_type);
 
