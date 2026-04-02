@@ -262,12 +262,14 @@ void env_delete(LEnv* env, LString name) {
 #define CHAR "char"
 #define BOOL "bool"
 #define NIL "nil"
+#define STRUCT "struct"
+#define VARIANT "variant"
 
 LEnv env_init(Arena* arena) {
   LEnv env;
   LType *nil_ptr;
   LType new_type;
-  LType *char_type, *char_ptr_type, *int_type;
+  LType *char_type, *char_ptr_type, *int_type, *struct_ptr, *variant_ptr;
 
 	env.prime_index = 0;
   env.capacity = PRIMES[env.prime_index];
@@ -279,6 +281,18 @@ LEnv env_init(Arena* arena) {
 	new_type.type_kind = LBase;
   nil_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
   nil_ptr->parent = nil_ptr;
+
+	new_type.name = (LString){.chars = STRUCT, .length=sizeof(STRUCT)-1};
+	new_type.members_len = 0;
+	new_type.type_kind = LPlex;
+	struct_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
+	struct_ptr->parent = nil_ptr;
+
+	new_type.name = (LString){.chars = VARIANT, .length=sizeof(VARIANT)-1};
+	new_type.members_len = 0;
+	new_type.type_kind = LPlex;
+	variant_ptr = (LType*)env_put_global(&env, new_type.name, new_type);
+	variant_ptr->parent = nil_ptr;
 
   new_type.name = (LString){.chars = INT, .length=sizeof(INT)-1};
 	new_type.type_kind = LBase;

@@ -12,8 +12,10 @@ void compile_def(FILE*, LEnv*, LVal*);
 void compile_let(FILE*, LEnv*, LVal*);
 void compile_plex(FILE*, LEnv*, LVal*);
 void compile_variant(FILE*, LEnv*, LVal*);
+void compile_variant_fields(FILE*, LEnv*, LVal*);
 void compile(FILE*, LEnv*, LVal*);
 
+//# print_lval
 void print_lval(FILE* file, LVal* lval) {
   switch(lval->ltype) {
   case LSymbol:
@@ -32,6 +34,7 @@ void print_lval(FILE* file, LVal* lval) {
   }
 }
 
+//# compile_binary_operator
 void compile_binary_operator(FILE* file, LEnv* env, LVal* lval, LString operator_symbol) {
 	/* (+ x y z) */
 	fprintf(file, "(");
@@ -55,6 +58,7 @@ bool is_binary_operator(LString symbol) {
 		|| LString_cmp(symbol, "||");
 }
 
+//# compile builtin
 bool compile_builtin(FILE* file, LEnv* env, LString symbol, LVal* lval) {
 	if (is_binary_operator(symbol)) {
 		compile_binary_operator(file, env, lval, symbol);
@@ -84,25 +88,22 @@ bool compile_builtin(FILE* file, LEnv* env, LString symbol, LVal* lval) {
 	return false;
 }
 
+//# compile plex
 void compile_plex_fields(FILE* file, LEnv* env, LVal* lval) {
 	assert(lval->ltype == LCons && "syntax error plex fields");
-	fprintf(file, "{\n");
 	while(lval->ltype != LNil && lval->car->ltype != LNil) {
 		if (LString_cmp(lval->car->car->symbol, "variant")) {
-			compile_variant(file, env, lval->car->cdr);
+			compile_variant_fields(file, env, lval->car->cdr);
 		} else {
-			fprintf(
-							file,
+			fprintf(file,
 							"%.*s %.*s;\n",
 							lval->car->car->symbol.length,
 							lval->car->car->symbol.chars,
 							lval->car->cdr->car->symbol.length,
-							lval->car->cdr->car->symbol.chars
-							);
+							lval->car->cdr->car->symbol.chars);
 		}
 		lval = lval->cdr;
 	}
-	fprintf(file, "}\n");
 }
 
 void compile_plex(FILE* file, LEnv* env, LVal* lval) {
@@ -110,54 +111,88 @@ void compile_plex(FILE* file, LEnv* env, LVal* lval) {
 
 	if (lval->car->ltype == LSymbol) {
 		// typedef
-		fprintf(
-						file,
-						"typedef struct %.*s ",
+		fprintf(file,
+						"typedef struct %.*s {",
 						lval->car->symbol.length,
-						lval->car->symbol.chars
-						);
+						lval->car->symbol.chars);
 		compile_plex_fields(file, env, lval->cdr);
+		fprintf(file,
+						"} %.*s;\n",
+						lval->car->symbol.length,
+						lval->car->symbol.chars);
 	} else {
 		// anonymous struct
-		fprintf(
-						file,
-						"struct "
-						);
+		fprintf(file,"struct {");
 		compile_plex_fields(file, env, lval->car);
+		fprintf(file, "};\n");
 	}
 }
 
+/*
+(plex LVal
+			(variant
+			 (LSymbol LString)
+			 (LLString LString)
+			 (LNumber int64_t)
+			 (LCons (plex ((LVal* car) (LVal* cdr))))
+			 (LNil))
+			(LType* type)
+			(LVal* parent))
+
+typedef struct lv {
+  enum {
+    LSym,
+    LCon,
+    LNi,
+  } variant;
+  union {
+    LString LSym;
+    struct {
+		  LVal* car;
+		  LVal* cdr;
+		} LCon;
+  };
+	LType* type;
+	LVal* parent;
+} lv;
+*/
+
+//# compile variant
 void compile_variant_fields(FILE* file, LEnv* env, LVal* lval) {
 	LVal* fields = lval;
-	fprintf(file, "{\nenum {\n");
-	while (fields->car->ltype == LCons) {
+	fprintf(file, "enum {\n");
+	while (fields->ltype != LNil && fields->car->ltype == LCons) {
 		fprintf(
 						file,
 						"%.*s\n",
 						fields->car->car->symbol.length,
 						fields->car->car->symbol.chars
 						);
-		if (fields->cdr->car->ltype != LNil) {
+		if (fields->cdr->ltype != LNil && fields->cdr->car->ltype != LNil) {
 			fprintf(file, ",");
 		}
 		fields = fields->cdr;
 	}
-	fprintf(file, "};\n");
+	fprintf(file, "} variant;\n");
 
 	fields = lval;
 	fprintf(file, "union {\n");
-	while (fields->car->ltype == LCons) {
-		fprintf(
-						file,
-						"%.*s %.*s;\n",
-						fields->car->car->symbol.length,
-						fields->car->car->symbol.chars,
-						lval->car->cdr->car->symbol.length,
-						lval->car->cdr->car->symbol.chars
-						);
-		fields = fields->cdr;
+	while (fields->ltype == LCons && fields->car->ltype == LCons) {
+		if (LString_cmp(fields->car->cdr->car->symbol, "plex")) {
+			compile_plex_fields(file, env, fields->car->cdr->cdr);
+		} else {
+			fprintf(
+							file,
+							"%.*s %.*s;\n",
+							fields->car->car->symbol.length,
+							fields->car->car->symbol.chars,
+							lval->car->cdr->car->symbol.length,
+							lval->car->cdr->car->symbol.chars
+							);
+			fields = fields->cdr;
+		}
 	}
-	fprintf(file, "};\n}");
+	fprintf(file, "};\n");
 }
 
 void compile_variant(FILE* file, LEnv* env, LVal* lval) {
@@ -167,21 +202,21 @@ void compile_variant(FILE* file, LEnv* env, LVal* lval) {
 		// typedef
 		fprintf(
 						file,
-						"typedef struct %.*s",
+						"typedef struct %.*s {",
 						lval->car->symbol.length,
 						lval->car->symbol.chars
 						);
 		compile_variant_fields(file, env, lval);
+		fprintf(file, "};\n");
 	} else {
 		// anonymous declaration
-		fprintf(
-						file,
-						"struct "
-						);
+		fprintf(file,"struct {");
 		compile_variant_fields(file, env, lval->car);
+		fprintf(file, "};");
 	}
 }
 
+//# compile funcall
 void compile_funcall(FILE* file, LEnv* env, LString symbol, LType* ftype, LVal* lval) {
 	fprintf(file, "%.*s", ftype->name.length, ftype->name.chars);
 	fprintf(file, "%.*s(", symbol.length, symbol.chars);
@@ -200,39 +235,7 @@ void compile_funcall(FILE* file, LEnv* env, LString symbol, LType* ftype, LVal* 
 	fprintf(file, ")");
 }
 
-void compile(FILE* file, LEnv* env, LVal* lval) {
-	LType* ltype;
-	switch (lval->ltype) {
-	case LCons:
-		switch (lval->car->ltype) {
-		case LCons: /* (+ 8 8) (* 7 7) */
-			compile(file, env, lval->car);
-			compile(file, env, lval->cdr);
-			break;
-		case LSymbol:
-			if (compile_builtin(file, env, lval->car->symbol, lval->cdr))
-				return;
-			ltype = env_lookup(env, lval->car->symbol);
-			if (ltype) {
-				compile_funcall(file, env, lval->car->symbol, ltype, lval->cdr);
-			} else {
-				print_lval(file, lval->car);
-			}
-			break;
-		case LNil:
-			fprintf(file,"()");
-			break;
-		default:
-			print_lval(file, lval->car);
-		}
-		break; /* I don't really understand but apparently I can just ignore lval->cdr in this case. */
-	case LNil:
-		break;
-	default:
-		print_lval(file, lval);
-	}
-}
-
+//# compile def
 void compile_def(FILE* file, LEnv* env, LVal* lval) {
   /*<main,<<argc,<argv,nil>>,<<return,<0,nil>>,nil>>>*/
   /* TODO: Type Checking Here? Or earlier in analysis. */
@@ -269,6 +272,7 @@ void compile_def(FILE* file, LEnv* env, LVal* lval) {
   fprintf(file, "}\n");
 }
 
+//# compile let
 void compile_let(FILE* file, LEnv* env, LVal* lval) {
   /* <<let,<<<x,<int,nil>>,<<y,<char,nil>>,nil>>,<<+,<x,<y,nil>>>,nil>>>,nil> */
   LVal* var_pairs, *body, *var_pair, *var_name, *var_type_symbol;
@@ -292,4 +296,39 @@ void compile_let(FILE* file, LEnv* env, LVal* lval) {
   
   compile(file, env, body);
   fprintf(file, "}");
+}
+
+
+//# compile
+void compile(FILE* file, LEnv* env, LVal* lval) {
+	LType* ltype;
+	switch (lval->ltype) {
+	case LCons:
+		switch (lval->car->ltype) {
+		case LCons: /* (+ 8 8) (* 7 7) */
+			compile(file, env, lval->car);
+			compile(file, env, lval->cdr);
+			break;
+		case LSymbol:
+			if (compile_builtin(file, env, lval->car->symbol, lval->cdr))
+				return;
+			ltype = env_lookup(env, lval->car->symbol);
+			if (ltype) {
+				compile_funcall(file, env, lval->car->symbol, ltype, lval->cdr);
+			} else {
+				print_lval(file, lval->car);
+			}
+			break;
+		case LNil:
+			fprintf(file,"()");
+			break;
+		default:
+			print_lval(file, lval->car);
+		}
+		break; /* I don't really understand but apparently I can just ignore lval->cdr in this case. */
+	case LNil:
+		break;
+	default:
+		print_lval(file, lval);
+	}
 }

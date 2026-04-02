@@ -10,10 +10,10 @@
 
 (plex LVal
 			(variant
-			 (LSymbol LString symbol)
-			 (LLString LString string)
-			 (LNumber int64_t number)
+			 (LSymbol LString)
+			 (LLString LString)
+			 (LNumber int64_t)
 			 (LCons (plex ((LVal* car) (LVal* cdr))))
-			 (LNil))
+			 (LNil nil))
 			(LType* type)
 			(LVal* parent))
