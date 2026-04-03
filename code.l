@@ -18,4 +18,22 @@
 			(LType* type)
 			(LVal* parent))
 
-(dec f (int int) int)
+(plex SymbolStack
+			(arr LVal* 2048 symbols)
+			(int index))
+
+(dec analyse (SymbolStack* LEnv* LVal*) int)
+(def analyse (sstack env lval)
+	(match
+	 lval
+	 ((dec . any) (analyse_dec sstack env (cdr lval)))
+	 ((plex . any) (analyse_plex sstack env (cdr lval)))
+	 ((cons . cons) (do (analyse sstack env (car lval)) (analyse sstack env (cdr lval))))
+	 (default (analyse (cdr lval)))))
+
+(defmacro swap (a b) (cons b a))
+(defmacro reverse (list)
+	(match
+	 list
+	 ((a . nil) a)
+	 ((a . any) (cons (reverse list) a))))

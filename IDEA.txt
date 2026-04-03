@@ -1,0 +1,20 @@
+Here is an idea.
+
+Let's piggy back of chibi scheme (https://synthcode.com/scheme/chibi/)
+
+In chibi we define the syntax for our new L language
+(plex)
+(variant)
+(label)
+(jmp)
+(+ - * / && || ...)
+
+We then define this language as a sub language, a DSL if you will.
+We then define a function, (compile) compile takes a valid L
+language program and writes the assembly for that code.
+
+So we are basically intelligently glueing together libtcc and chibi.
+A immediate downside I can think of is that all the language functions
+  in chibi are going to be written for the chibi vm.
+So we are going to lose that JIT effect where every expression is still
+  valid L but it gets compiled and executed beforehand. 
