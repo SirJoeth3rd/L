@@ -8,11 +8,6 @@
 #include "src/arena.h"
 #include "src/lstring.h"
 
-typedef struct {
-  bool valid;
-  const char* mesg;
-} LErr;
-
 typedef struct LVal LVal;
 typedef struct LType LType;
 typedef struct LEnv LEnv;
@@ -31,12 +26,6 @@ struct LType {
 	} type_kind;
 };
 
-/*
-	I'm not exactly concerned about the performance charecteristics
-	of the precompilation lvals etc. The purpose of these are just
-	to compile the real deal. 
-*/
-
 struct LVal {
   enum {
     LSymbol,
@@ -54,7 +43,6 @@ struct LVal {
     LString string;
     long long int number;
   };
-	LType* type;
 	LVal* parent;
 };
 
@@ -103,7 +91,7 @@ int Llist_length(LVal*);
 LVal* parse(Arena*, char**); /* parse to lval*/
 
 /* Analysis */
-LErr analyse(Arena*, LEnv*, LVal*); /* add type info*/
+void analyse(Arena*, LEnv*, LVal*); /* add type info*/
 
 /* Code Gen */
 void compile(FILE*, LEnv*, LVal*);

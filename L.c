@@ -24,8 +24,9 @@
 
 /*
   Layer 0: transpiler to C89.
-  Layer 1: JIT compilation/interactive debugging using TCC.
+  Layer 1: JIT compilation/interactive debugging using TCC (REPL).
   Layer 2: Macro expansion using the JIT compiled functions.
+	Layer 3: Type system.
 */
 
 /* Syntax

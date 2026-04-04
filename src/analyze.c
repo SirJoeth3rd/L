@@ -42,29 +42,6 @@ LErr assign_type(LEnv* env, LVal* lval) {
 	
 }
 
-LErr analyse_let(Arena* arena, LEnv* env, LVal* lval) {
-	/* (let ((x int 0) (y int 0)) lval starts at ((x
-		   (+ x y))*/
-
-	assert(lval->ltype == LCons && "syntax error in let");
-	assert(lval->car->ltype == LCons && "syntax error on let declaration list");
-	assert(lval->cdr->ltype == LCons && "syntax error on let body");
-
-	LVal* dec_list = lval->car;
-	LVal* declaration = lval->car->car;
-
-	assert(declaration->ltype == LCons && "syntax error in declaration");
-
-	while (dec_list->cdr && dec_list->cdr->ltype != LNil) {
-		
-	}
-
-	printf("===ANALYSE LET===\n");
-	pprint(lval, 0);
-	printf("===/ANALYSE LET/===\n");
-	return (LErr){0};
-}
-
 LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
   /* <f, <<int, <int, nil>>, <int, nil>>> == example setup*/
   LType function_type;
