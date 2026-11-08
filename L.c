@@ -47,8 +47,7 @@
 	 (append arg-types type)
        ))
        (dec name arg-types type)
-       (def name arg-names body))
-   )
+       (def name arg-names body)))
 
    Core of the language seems to be
    (set position value)

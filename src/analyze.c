@@ -35,13 +35,6 @@ LErr analyse(Arena* arena, LEnv* env, LVal* lval) {
 	return (LErr){0};
 }
 
-LErr assign_type(LEnv* env, LVal* lval) {
-	// run up the tree
-
-	
-	
-}
-
 LErr analyse_dec(Arena* arena, LEnv* env, LVal* first_cons) {
   /* <f, <<int, <int, nil>>, <int, nil>>> == example setup*/
   LType function_type;

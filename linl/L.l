@@ -41,7 +41,12 @@
 		 (match lval
 			 (('dec (cons c)) (analyse_dec c))
 			 ((cons cons) (do (analyse (car lval)) (analyse (cdr lval))))
-			 ((any cons) (anaylyse (cdr lval)))))
+			 ((any cons) (analyse (cdr lval)))))
+
+(defmacro set-fields (plexval fieldpairs)
+	(for (int i 0) (< i (llength fieldpairs)) (++ i)
+			 (match (idx fieldpairs i)
+							(((lsymbol name) (lexpr val)) (yield (set (. plexval name) val))))))
 
 (def analyse_dec (arena env lval)
 		 (let
@@ -52,10 +57,16 @@
 			 (int param_count)
 			 (int i)
 			 (do
-					 (set (. function_type name) (-> (car lval) symbol))
-					 (set (. function_type members_len) (length params))
-				   (set (. function_type members) (arena_alloc arena (* param_count (sizeof LType*))))
-					 
-					 )
-			 )
-		 )
+				(set-fields function_type
+							(name (-> (car lval) symbol))
+							(members_len (llength params))
+							(members (arena_alloc arena (* param_count (sizeof LType*)))))
+				 (for ((set i 0) (< i (- param_count 1)) (++ i))
+							(do
+							 (cond
+								 (!= param->car->ltype LSymbol)
+								 (lerror "Expected LType" (car param)))
+							 (set member_type (env_lookup env (-> (car param) symbol)))
+							 (cond (! member_type) (lerror "Could not find type" param))
+							 (set function_type.members[i] member_type)
+							 (set param (cdr param)))))))
